@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.mealsnap.app",
+        "sha256_cert_fingerprints": ["D2:93:5F:0F:C7:88:9A:2C:2C:D7:BC:82:61:11:00:88:B0:33:47:3C:81:FE:7B:B5:8B:24:C9:D2:B5:DD:13:6D"]
+      }
+    }]
