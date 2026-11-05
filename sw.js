@@ -43,3 +43,5 @@ self.addEventListener('fetch', function (e) {
     })
   );
 });
+
+// deployed Nov 5
