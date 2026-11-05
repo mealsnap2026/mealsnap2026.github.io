@@ -79,6 +79,16 @@
         <label class="field"><span>Fiber (g)</span><input type="number" id="f-fiber" min="0" step="1" value="0"></label>
         <label class="field"><span>Sugar (g)</span><input type="number" id="f-sugar" min="0" step="1" value="0"></label>
       </div>
+      <div class="field photo-field">
+        <span>Photo (optional)</span>
+        <div class="photo-row">
+          <img id="photo-preview" class="photo-preview hidden" alt="Your meal photo">
+          <label class="photo-add-btn" for="f-photo" id="photo-add-label">📷 Add a photo</label>
+          <input type="file" id="f-photo" accept="image/*" class="visually-hidden">
+          <button type="button" class="small-btn danger hidden" id="photo-remove">Remove photo</button>
+        </div>
+        <p class="hint">Take a photo or pick one from your gallery. The photo stays on this phone only — it is never sent anywhere.</p>
+      </div>
       <p class="review-line" id="review-line">Is this right? Check the numbers, then save.</p>
       <button type="submit" class="btn-primary" id="save-btn">Looks right — save meal</button>
       <button type="button" class="btn-quiet" id="clear-btn">Clear</button>
@@ -141,10 +151,16 @@
     <p class="disclaimer">MealSnap is for information only. It does not diagnose, treat, or give medical advice. Please set your personal goals with your doctor or care team.</p>
 
     <h3 class="chart-title">My data</h3>
-    <p class="hint">Your meals are saved only on this phone. No account, no sign-in, nothing is sent anywhere.</p>
+    <p class="hint">Your meals and meal photos are saved only on this phone. No account, no sign-in, nothing is sent anywhere.</p>
     <button class="btn-danger" id="wipe-btn">Delete all my data</button>
   </section>
 </main>
+
+<!-- PHOTO VIEWER -->
+<div id="photo-lightbox" class="lightbox hidden">
+  <img id="lightbox-img" alt="Meal photo">
+  <button type="button" class="lightbox-close" id="lightbox-close">✕ Close</button>
+</div>
 
 <nav class="tab-bar">
   <button class="tab active" data-view="today"><span class="tab-ico">🏠</span>Today</button>
