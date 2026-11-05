@@ -51,6 +51,98 @@ var meals = loadJSON(MEALS_KEY, []);
 var goals = loadJSON(GOALS_KEY, { carbGoal: 180, calGoal: 1800 });
 var profile = loadJSON(PROFILE_KEY, {});
 
+/* ---------- Meal photos (IndexedDB — one photo per meal, on this phone only) ----------
+   Photos are too big for localStorage, so they live in IndexedDB keyed by meal id.
+   Nothing is ever uploaded. If IndexedDB is unavailable, every photo function
+   below quietly does nothing and the app still works as before. */
+var PHOTO_DB = 'mealsnap';
+var PHOTO_STORE = 'photos';
+var photoDbPromise = null;
+
+function openPhotoDb() {
+  if (!('indexedDB' in window)) return Promise.resolve(null);
+  if (photoDbPromise) return photoDbPromise;
+  photoDbPromise = new Promise(function (resolve) {
+    var req;
+    try { req = indexedDB.open(PHOTO_DB, 1); } catch (e) { resolve(null); return; }
+    req.onupgradeneeded = function () {
+      if (!req.result.objectStoreNames.contains(PHOTO_STORE)) {
+        req.result.createObjectStore(PHOTO_STORE);
+      }
+    };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { resolve(null); };
+    req.onblocked = function () { resolve(null); };
+  });
+  return photoDbPromise;
+}
+function photoTxn(mode, run) {
+  return openPhotoDb().then(function (db) {
+    return new Promise(function (resolve) {
+      if (!db) { resolve(null); return; }
+      var result = null;
+      try {
+        var tx = db.transaction(PHOTO_STORE, mode);
+        var req = run(tx.objectStore(PHOTO_STORE));
+        if (req) {
+          req.onsuccess = function () { result = req.result; };
+          req.onerror = function () { result = null; };
+        }
+        tx.oncomplete = function () { resolve(result); };
+        tx.onerror = function () { resolve(null); };
+        tx.onabort = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+  });
+}
+function photoPut(id, blob) {
+  if (!blob) return Promise.resolve(null);
+  return photoTxn('readwrite', function (store) { return store.put(blob, id); });
+}
+function photoGet(id) {
+  return photoTxn('readonly', function (store) { return store.get(id); })
+    .then(function (blob) { return blob || null; });
+}
+function photoDelete(id) {
+  return photoTxn('readwrite', function (store) { return store.delete(id); });
+}
+function photoClear() {
+  return photoTxn('readwrite', function (store) { return store.clear(); });
+}
+
+/* Shrink a picked phone photo before storing: max 1024px on the long side, JPEG 0.8. */
+function downscaleImage(file) {
+  return new Promise(function (resolve, reject) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var max = 1024;
+        var w = img.naturalWidth || img.width;
+        var h = img.naturalHeight || img.height;
+        var scale = Math.min(1, max / Math.max(w, h));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        if (canvas.toBlob) {
+          canvas.toBlob(function (blob) {
+            if (blob) resolve(blob); else reject(new Error('Could not process photo'));
+          }, 'image/jpeg', 0.8);
+        } else {
+          var bin = atob(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+          var arr = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+          resolve(new Blob([arr], { type: 'image/jpeg' }));
+        }
+      } catch (e) { URL.revokeObjectURL(url); reject(e); }
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('Could not read photo')); };
+    img.src = url;
+  });
+}
+
 /* ---------- Helpers ---------- */
 function $(id) { return document.getElementById(id); }
 function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -121,6 +213,8 @@ function renderToday() {
   $('meal-empty').style.display = todays.length ? 'none' : 'block';
   list.innerHTML = todays.map(function (m) {
     return '<div class="meal-card">' +
+      '<img class="meal-thumb hidden" data-thumb="' + m.id + '" alt="Photo of ' + esc(m.name) + '">' +
+      '<div class="meal-body">' +
       '<div class="meal-top"><span class="meal-name">' + esc(m.name) + '</span>' +
       '<span class="meal-type">' + esc(m.type) + '</span></div>' +
       '<div class="meal-macros"><strong>' + round(m.carbs) + 'g carbs</strong> · ' +
@@ -131,7 +225,7 @@ function renderToday() {
       '<div class="meal-actions">' +
       '<button class="small-btn" data-edit="' + m.id + '">Edit</button>' +
       '<button class="small-btn danger" data-del="' + m.id + '">Delete</button>' +
-      '</div></div>';
+      '</div></div></div>';
   }).join('');
   list.querySelectorAll('[data-edit]').forEach(function (b) {
     b.addEventListener('click', function () { startEdit(b.getAttribute('data-edit')); });
@@ -139,16 +233,92 @@ function renderToday() {
   list.querySelectorAll('[data-del]').forEach(function (b) {
     b.addEventListener('click', function () {
       var id = b.getAttribute('data-del');
+      var meal = meals.filter(function (m) { return String(m.id) === String(id); })[0];
       meals = meals.filter(function (m) { return String(m.id) !== String(id); });
       saveJSON(MEALS_KEY, meals);
+      if (meal) photoDelete(meal.id);
       renderToday();
+    });
+  });
+  /* Fill in photo thumbnails as they load from IndexedDB (async-safe:
+     if the list was re-rendered meanwhile, the slot is gone and we skip). */
+  todays.forEach(function (m) {
+    photoGet(m.id).then(function (blob) {
+      if (!blob) return;
+      var img = list.querySelector('[data-thumb="' + m.id + '"]');
+      if (!img || img.getAttribute('src')) return;
+      img.src = URL.createObjectURL(blob);
+      img.classList.remove('hidden');
+      img.addEventListener('click', function () { openLightbox(blob); });
     });
   });
 }
 
+/* ---------- Photo viewer (lightbox) ---------- */
+var lightboxUrl = null;
+function openLightbox(blob) {
+  if (lightboxUrl) URL.revokeObjectURL(lightboxUrl);
+  lightboxUrl = URL.createObjectURL(blob);
+  $('lightbox-img').src = lightboxUrl;
+  $('photo-lightbox').classList.remove('hidden');
+}
+function closeLightbox() {
+  $('photo-lightbox').classList.add('hidden');
+}
+$('lightbox-close').addEventListener('click', closeLightbox);
+$('photo-lightbox').addEventListener('click', function (e) {
+  if (e.target === this) closeLightbox();
+});
+
 /* ---------- Add / edit a meal ---------- */
 var editingId = null;
 var selectedFood = null;
+
+/* Photo state for the form: a newly picked photo (already downscaled),
+   or a flag that the meal's stored photo should be removed on save. */
+var pendingPhotoBlob = null;
+var pendingPhotoRemoved = false;
+var previewUrl = null;
+
+function setPhotoPreview(blob) {
+  if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+  var img = $('photo-preview');
+  if (blob) {
+    previewUrl = URL.createObjectURL(blob);
+    img.src = previewUrl;
+    img.classList.remove('hidden');
+    $('photo-remove').classList.remove('hidden');
+    $('photo-add-label').textContent = '📷 Change photo';
+  } else {
+    img.removeAttribute('src');
+    img.classList.add('hidden');
+    $('photo-remove').classList.add('hidden');
+    $('photo-add-label').textContent = '📷 Add a photo';
+  }
+}
+function clearPhotoState() {
+  pendingPhotoBlob = null;
+  pendingPhotoRemoved = false;
+  $('f-photo').value = '';
+  setPhotoPreview(null);
+}
+$('f-photo').addEventListener('change', function () {
+  var file = this.files && this.files[0];
+  if (!file) return;
+  downscaleImage(file).then(function (blob) {
+    pendingPhotoBlob = blob;
+    pendingPhotoRemoved = false;
+    setPhotoPreview(blob);
+  }).catch(function () {
+    alert('Sorry, that photo could not be added. Please try another one.');
+  });
+});
+$('photo-remove').addEventListener('click', function () {
+  pendingPhotoBlob = null;
+  pendingPhotoRemoved = true;
+  $('f-photo').value = '';
+  setPhotoPreview(null);
+});
 
 function renderFoodList(filter) {
   var q = (filter || '').toLowerCase();
@@ -188,6 +358,7 @@ function updateReview() {
 function resetForm() {
   editingId = null;
   selectedFood = null;
+  clearPhotoState();
   $('add-title').textContent = 'Add a meal';
   $('save-btn').textContent = 'Looks right — save meal';
   $('meal-form').reset();
@@ -200,12 +371,20 @@ function startEdit(id) {
   if (!m) return;
   editingId = m.id;
   selectedFood = null;
+  clearPhotoState();
   $('add-title').textContent = 'Edit meal';
   $('save-btn').textContent = 'Save changes';
   $('f-name').value = m.name;
   $('f-type').value = m.type;
   $('f-servings').value = 1;
   setFormValues(m);
+  var editId = m.id;
+  photoGet(m.id).then(function (blob) {
+    /* Show the stored photo unless the user has already changed it in this edit. */
+    if (blob && editingId === editId && !pendingPhotoBlob && !pendingPhotoRemoved) {
+      setPhotoPreview(blob);
+    }
+  });
   showView('add');
 }
 $('food-search').addEventListener('input', function () { renderFoodList(this.value); });
@@ -231,16 +410,22 @@ $('meal-form').addEventListener('submit', function (e) {
     cal: num($('f-cal')), carbs: num($('f-carbs')), protein: num($('f-protein')),
     fat: num($('f-fat')), fiber: num($('f-fiber')), sugar: num($('f-sugar'))
   };
+  var savedId;
   if (editingId !== null) {
+    savedId = editingId;
     meals.forEach(function (m) { if (m.id === editingId) Object.assign(m, values); });
   } else {
     var now = new Date();
     values.id = Date.now();
     values.date = todayKey();
     values.time = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    savedId = values.id;
     meals.push(values);
   }
   saveJSON(MEALS_KEY, meals);
+  if (pendingPhotoBlob) photoPut(savedId, pendingPhotoBlob);
+  else if (pendingPhotoRemoved) photoDelete(savedId);
+  clearPhotoState();
   editingId = null;
   showView('today');
 });
@@ -340,6 +525,7 @@ $('wipe-btn').addEventListener('click', function () {
   localStorage.removeItem(MEALS_KEY);
   localStorage.removeItem(GOALS_KEY);
   localStorage.removeItem(PROFILE_KEY);
+  photoClear();
   meals = []; goals = { carbGoal: 180, calGoal: 1800 }; profile = {};
   resetForm(); renderGoals();
   alert('All MealSnap data on this phone has been deleted.');
