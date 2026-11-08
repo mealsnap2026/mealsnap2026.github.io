@@ -279,9 +279,15 @@ var selectedFood = null;
 var pendingPhotoBlob = null;
 var pendingPhotoRemoved = false;
 var previewUrl = null;
+/* The photo currently shown in the form (a fresh pick, or a meal's stored
+   photo while editing) — this is what "Calculate from photo" would send. */
+var currentPhotoBlob = null;
 
 function setPhotoPreview(blob) {
-  if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+     if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+     currentPhotoBlob = blob || null;
+     $('photo-estimate').classList.toggle('hidden', !blob);
+     if (!blob) hideEstimateNote();
   var img = $('photo-preview');
   if (blob) {
     previewUrl = URL.createObjectURL(blob);
@@ -318,15 +324,8 @@ function handlePhotoPick() {
 }
 $('f-photo').addEventListener('change', handlePhotoPick);
 $('f-photo-cam').addEventListener('change', handlePhotoPick);
-$('photo-remove').addEventListener('click', function () {
-  pendingPhotoBlob = null;
-  pendingPhotoRemoved = true;
-  $('f-photo').value = '';
-  $('f-photo-cam').value = '';
-  setPhotoPreview(null);
-});
-
-function setFormValues(v) {
+$('photo-remove').addEventListener('click', function () {   pendingPhotoBlob = null;   pendingPhotoRemoved = true;   $('f-photo').value = '';   $('f-photo-cam').value = '';   setPhotoPreview(null); });  /* ---------- AI photo calculation (Google Gemini — user's own key, on this phone only) ----------    The user pastes her own free Gemini API key in Goals; it lives ONLY in    localStorage on this phone, never in the app code. Nothing is sent anywhere    until she taps "✨ Calculate from photo" — then that one photo goes to    Google Gemini and the estimated numbers fill the form, always editable.    If anything goes wrong she can still type the numbers in as before. */ var GEMINI_KEY_STORE = 'mealsnap-gemini-key'; var ESTIMATE_PROMPT = 'You are a nutrition estimator for a meal-tracking app. Look at this meal photo and estimate the nutrition for the pictured portion, treated as one serving. Reply with JSON only, no other text: {"name": "short meal name", "calories": number, "carbs_g": number, "protein_g": number, "fat_g": number, "fiber_g": number, "sugar_g": number}. Use plain numbers (grams for macros). If the photo does not show food or a drink, reply {"error": "not_food"}.';  function getGeminiKey() {   try { return localStorage.getItem(GEMINI_KEY_STORE) || ''; } catch (e) { return ''; } } function showEstimateNote() {   var n = $('estimate-note');   n.textContent = '✨ AI estimate — please check the numbers before saving.';   n.classList.remove('hidden'); } function hideEstimateNote() {   $('estimate-note').classList.add('hidden'); } function blobToBase64(blob) {   return new Promise(function (resolve, reject) {     var reader = new FileReader();     reader.onload = function () {       var s = String(reader.result || '');       resolve(s.slice(s.indexOf(',') + 1));     };     reader.onerror = function () { reject(new Error('Could not read photo')); }     
+   reader.readAsDataURL(blob);   }); } /* Parse Gemini's reply text as JSON; tolerate stray prose around the object. */ function parseEstimate(text) {   try { return JSON.parse(text); } catch (e) { /* fall through */ }   var m = String(text).match(/\{[\s\S]*\}/);   if (m) { try { return JSON.parse(m[0]); } catch (e) { /* fall through */ } }   return null; } function geminiEstimate(key, base64, model) {   return fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {     method: 'POST',     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },     body: JSON.stringify({       contents: [{ parts: [         { text: ESTIMATE_PROMPT },         { inlineData: { mimeType: 'image/jpeg', data: base64 } }       ] }],       generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }     })   }).then(function (res) {     if (res.status === 404 && model === 'gemini-2.5-flash') {       return geminiEstimate(key, base64, 'gemini-3-flash-preview');     }     if (!res.ok) throw new Error('Gemini request failed (' + res.status + ')');     return res.json();   }).then(function (json) {     var parts = json && json.candidates && json.candidates[0] &&       json.candidates[0].content && json.candidates[0].content.parts;     var text = '';     if (parts) parts.forEach(function (p) { if (p.text) text += p.text; });     if (!text) throw new Error('Empty estimate');     return parseEstimate(text);   }); } $('photo-estimate').addEventListener('click', function () {   var key = getGeminiKey();   if (!key) {     alert('To calculate from a photo, first add your free Google Gemini key — you will find it in the Goals section, under "AI photo calculation".');     showView('goals');     return;   }   if (!currentPhotoBlob) return;   var btn = $('photo-estimate');   var oldText = btn.textContent;   btn.disabled = true;   btn.textContent = 'Looking at your meal…';   hideEstimateNote();   blobToBase64(currentPhotoBlob).then(function (b64) {     return geminiEstimate(key, b64, 'gemini-2.5-flash');   }).then(function (data) {     if (data && data.error === 'not_food') {       alert("That photo doesn't look like food — try a photo of your meal, or type the numbers in.");       return;     }     if (!data || typeof data.calories === 'undefined') throw new Error('Bad estimate');     if (data.name) $('f-name').value = data.name;     setFormValues({       cal: data.calories || 0, carbs: data.carbs_g || 0, protein: data.protein_g || 0,       fat: data.fat_g || 0, fiber: data.fiber_g || 0, sugar: data.sugar_g || 0     });     showEstimateNote();   }).catch(function () {     alert("The estimate didn't work (check your connection and key) — you can still type the numbers in.");   }).then(function () {     btn.disabled = false;     btn.textContent = oldText;   }); });  /* Gemini key settings (Goals view) */ function renderKeyState() {   var has = !!getGeminiKey();   $('key-state').textContent = has ? 'Key saved ✓' : '';   $('key-clear').classList.toggle('hidden', !has);   $('g-key').placeholder = has ? 'Key saved — paste a new key to replace it' : 'Paste your key here'; } $('key-save').addEventListener('click', function () {   var v = $('g-key').value.trim();   if (!v) { alert('Paste your Gemini key first, then tap Save key.'); return; }   try { localStorage.setItem(GEMINI_KEY_STORE, v); } catch (e) {}   $('g-key').value = '';   renderKeyState();   $('key-save').textContent = 'Saved ✓';   setTimeout(function () { $('key-save').textContent = 'Save key'; }, 1500); }); $('key-clear').addEventListener('click', function () {   try { localStorage.removeItem(GEMINI_KEY_STORE); } catch (e) {}   $('g-key').value = '';   renderKeyState(); });  function setFormValues(v) {
   $('f-cal').value = round(v.cal); $('f-carbs').value = round(v.carbs);
   $('f-protein').value = round(v.protein); $('f-fat').value = round(v.fat);
   $('f-fiber').value = round(v.fiber); $('f-sugar').value = round(v.sugar);
@@ -465,6 +464,7 @@ function renderGoals() {
   if (profile.weight) $('c-weight').value = profile.weight;
   if (profile.activity) $('c-activity').value = profile.activity;
   if (profile.aim) $('c-aim').value = profile.aim;
+     renderKeyState();
 }
 $('goals-save').addEventListener('click', function () {
   var c = num($('g-carbs')), k = num($('g-cal'));
@@ -506,6 +506,7 @@ $('wipe-btn').addEventListener('click', function () {
   localStorage.removeItem(MEALS_KEY);
   localStorage.removeItem(GOALS_KEY);
   localStorage.removeItem(PROFILE_KEY);
+     localStorage.removeItem(GEMINI_KEY_STORE);
   photoClear();
   meals = []; goals = { carbGoal: 180, calGoal: 1800 }; profile = {};
   resetForm(); renderGoals();
