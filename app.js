@@ -288,67 +288,49 @@ function setPhotoPreview(blob) {
     img.src = previewUrl;
     img.classList.remove('hidden');
     $('photo-remove').classList.remove('hidden');
-    $('photo-add-label').textContent = '📷 Change photo';
+    $('photo-add-label').textContent = '🖼️ Change photo';
+  $('photo-cam-label').textContent = '📷 Change photo';
   } else {
     img.removeAttribute('src');
     img.classList.add('hidden');
     $('photo-remove').classList.add('hidden');
-    $('photo-add-label').textContent = '📷 Add a photo';
+    $('photo-add-label').textContent = '🖼️ Pick from gallery';
+  $('photo-cam-label').textContent = '📷 Take a photo';
   }
 }
 function clearPhotoState() {
   pendingPhotoBlob = null;
   pendingPhotoRemoved = false;
   $('f-photo').value = '';
+  $('f-photo-cam').value = '';
   setPhotoPreview(null);
 }
-$('f-photo').addEventListener('change', function () {
+function handlePhotoPick() {
   var file = this.files && this.files[0];
   if (!file) return;
   downscaleImage(file).then(function (blob) {
     pendingPhotoBlob = blob;
     pendingPhotoRemoved = false;
     setPhotoPreview(blob);
-  }).catch(function () {
+    }).catch(function () {
     alert('Sorry, that photo could not be added. Please try another one.');
   });
-});
+}
+$('f-photo').addEventListener('change', handlePhotoPick);
+$('f-photo-cam').addEventListener('change', handlePhotoPick);
 $('photo-remove').addEventListener('click', function () {
   pendingPhotoBlob = null;
   pendingPhotoRemoved = true;
   $('f-photo').value = '';
+  $('f-photo-cam').value = '';
   setPhotoPreview(null);
 });
 
-function renderFoodList(filter) {
-  var q = (filter || '').toLowerCase();
-  var items = FOODS.filter(function (f) { return f.name.toLowerCase().indexOf(q) !== -1; });
-  $('food-list').innerHTML = items.map(function (f, i) {
-    return '<button type="button" class="food-item" data-food="' + esc(f.name) + '">' +
-      '<span class="fi-name">' + esc(f.name) + ' — ' + esc(f.serving) + '</span>' +
-      '<span class="fi-macros">' + f.cal + ' cal · ' + f.carbs + 'g carbs · ' +
-      f.protein + 'g protein · ' + f.fat + 'g fat</span></button>';
-  }).join('') || '<p class="hint">No match — just type your own numbers below.</p>';
-  $('food-list').querySelectorAll('[data-food]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var f = FOODS.filter(function (x) { return x.name === b.getAttribute('data-food'); })[0];
-      if (f) pickFood(f, b);
-    });
-  });
-}
 function setFormValues(v) {
   $('f-cal').value = round(v.cal); $('f-carbs').value = round(v.carbs);
   $('f-protein').value = round(v.protein); $('f-fat').value = round(v.fat);
   $('f-fiber').value = round(v.fiber); $('f-sugar').value = round(v.sugar);
   updateReview();
-}
-function pickFood(food, btn) {
-  selectedFood = food;
-  document.querySelectorAll('.food-item').forEach(function (el) { el.classList.remove('selected'); });
-  if (btn) btn.classList.add('selected');
-  $('f-name').value = food.name;
-  $('f-servings').value = 1;
-  setFormValues(food);
 }
 function updateReview() {
   var name = $('f-name').value.trim() || 'This meal';
@@ -363,8 +345,7 @@ function resetForm() {
   $('save-btn').textContent = 'Looks right — save meal';
   $('meal-form').reset();
   $('f-servings').value = 1;
-  setFormValues({ cal: 0, carbs: 0, protein: 0, fat: 0, fiber: 0, sugar: 0 });
-  renderFoodList($('food-search').value);
+    setFormValues({ cal: 0, carbs: 0, protein: 0, fat: 0, fiber: 0, sugar: 0 });
 }
 function startEdit(id) {
   var m = meals.filter(function (x) { return String(x.id) === String(id); })[0];
@@ -387,7 +368,7 @@ function startEdit(id) {
   });
   showView('add');
 }
-$('food-search').addEventListener('input', function () { renderFoodList(this.value); });
+
 $('f-servings').addEventListener('input', function () {
   if (!selectedFood) return;
   var s = num(this) || 1;
@@ -533,6 +514,5 @@ $('wipe-btn').addEventListener('click', function () {
 });
 
 /* ---------- Init ---------- */
-renderFoodList('');
 resetForm();
 renderToday();
