@@ -85,9 +85,11 @@
           <input type="file" id="f-photo" accept="image/*" class="visually-hidden">
           <button type="button" class="small-btn danger hidden" id="photo-remove">Remove photo</button>
         </div>
-        <p class="hint">Take a photo or pick one from your gallery. The photo stays on this phone only — it is never sent anywhere.</p>
+                <button type="button" class="btn-estimate hidden" id="photo-estimate">✨ Calculate from photo</button>
+                <p class="hint">Take a photo or pick one from your gallery. Photos stay on this phone; a photo is sent to Google only when you tap ✨ Calculate.</p>
       </div>
-      <p class="review-line" id="review-line">Is this right? Check the numbers, then save.</p>
+            <p class="review-line hidden" id="estimate-note"></p>
+            <p class="review-line" id="review-line">Is this right? Check the numbers, then save.</p>
       <button type="submit" class="btn-primary" id="save-btn">Looks right — save meal</button>
       <button type="button" class="btn-quiet" id="clear-btn">Clear</button>
     </form>
@@ -148,8 +150,15 @@
 
     <p class="disclaimer">MealSnap is for information only. It does not diagnose, treat, or give medical advice. Please set your personal goals with your doctor or care team.</p>
 
-    <h3 class="chart-title">My data</h3>
-    <p class="hint">Your meals and meal photos are saved only on this phone. No account, no sign-in, nothing is sent anywhere.</p>
+        <h3 class="chart-title">AI photo calculation</h3>
+        <p class="hint">Your key stays on this phone. When you tap Calculate, your meal photo is sent to Google Gemini for that one estimate.</p>
+        <label class="field"><span>Google Gemini API key</span><input type="password" id="g-key" placeholder="Paste your key here" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <button class="btn-primary" id="key-save">Save key</button>
+        <button class="btn-quiet hidden" id="key-clear">Remove key</button>
+        <p class="hint"><span id="key-state"></span> <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free key</a></p>
+
+        <h3 class="chart-title">My data</h3>
+        <p class="hint">Your meals and meal photos are saved only on this phone. No account, no sign-in. Nothing is sent anywhere unless you tap ✨ Calculate from photo — then that one photo is sent to Google Gemini for an estimate.</p>
     <button class="btn-danger" id="wipe-btn">Delete all my data</button>
   </section>
 </main>
