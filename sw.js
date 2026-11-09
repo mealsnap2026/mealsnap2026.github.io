@@ -1,5 +1,5 @@
 /* MealSnap service worker — cache the app shell so MealSnap opens offline. */
-var CACHE = 'mealsnap-v3'
+var CACHE = 'mealsnap-v4'
   ;var SHELL = [
   './',
   './index.html',
