@@ -127,13 +127,28 @@
 
     <h3 class="chart-title" data-i18n="calcTitle">Calorie suggestion calculator</h3>
     <p class="hint" data-i18n="calcHint">Uses the Mifflin–St Jeor formula. Optional — you can always set goals yourself above.</p>
+    <div class="field">
+      <span data-i18n="unitsLabel">Units</span>
+      <div class="toggle-row">
+        <button type="button" class="toggle-btn active" id="units-metric" data-i18n="unitsMetric">Metric (cm / kg)</button>
+        <button type="button" class="toggle-btn" id="units-imperial" data-i18n="unitsImperial">Imperial (ft / lb)</button>
+      </div>
+    </div>
     <div class="field-grid">
       <label class="field"><span data-i18n="sexLabel">Sex</span>
         <select id="c-sex"><option value="female" data-i18n="female">Female</option><option value="male" data-i18n="male">Male</option></select>
       </label>
       <label class="field"><span data-i18n="ageLabel">Age (years)</span><input type="number" id="c-age" min="13" max="110" placeholder="45"></label>
-      <label class="field"><span data-i18n="heightLabel">Height (cm)</span><input type="number" id="c-height" min="100" max="250" placeholder="165"></label>
-      <label class="field"><span data-i18n="weightLabel">Weight (kg)</span><input type="number" id="c-weight" min="30" max="300" placeholder="70"></label>
+      <label class="field" id="c-height-wrap"><span id="c-height-label">Height (cm)</span><input type="number" id="c-height" min="100" max="250" placeholder="165"></label>
+      <div class="field hidden" id="c-height-imp-wrap">
+        <span id="c-height-imp-label">Height (ft / in)</span>
+        <div class="field-row">
+          <input type="number" id="c-height-ft" min="3" max="8" step="1" placeholder="Feet" data-i18n-ph="feetPh" aria-label="Feet">
+          <input type="number" id="c-height-in" min="0" max="11" step="1" placeholder="Inches" data-i18n-ph="inchesPh" aria-label="Inches">
+        </div>
+      </div>
+      <label class="field" id="c-weight-wrap"><span id="c-weight-label">Weight (kg)</span><input type="number" id="c-weight" min="30" max="300" placeholder="70"></label>
+      <label class="field hidden" id="c-weight-imp-wrap"><span id="c-weight-imp-label">Weight (lb)</span><input type="number" id="c-weight-lb" min="66" max="661" step="1" placeholder="154"></label>
       <label class="field"><span data-i18n="activityLabel">Activity</span>
         <select id="c-activity">
           <option value="1.2" data-i18n="actSit">Mostly sitting</option>
