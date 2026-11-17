@@ -38,6 +38,7 @@ var FOODS = [
 var MEALS_KEY = 'mealsnap.meals.v1';
 var GOALS_KEY = 'mealsnap.goals.v1';
 var PROFILE_KEY = 'mealsnap.profile.v1';
+var UNITS_KEY = 'mealsnap.units.v1';
 
 function loadJSON(key, fallback) {
   try {
@@ -52,6 +53,12 @@ function saveJSON(key, value) {
 var meals = loadJSON(MEALS_KEY, []);
 var goals = loadJSON(GOALS_KEY, { carbGoal: 180, calGoal: 1800 });
 var profile = loadJSON(PROFILE_KEY, {});
+/* Calculator display units: 'metric' (cm / kg) or 'imperial' (ft / lb).
+   Display-only preference, kept on this phone like the language choice;
+   the profile itself is always stored in metric (see the Goals section). */
+var units = (function () {
+  try { return localStorage.getItem(UNITS_KEY) === 'imperial' ? 'imperial' : 'metric'; } catch (e) { return 'metric'; }
+})();
 
 /* ---------- Meal photos (IndexedDB — one photo per meal, on this phone only) ----------
    Photos are too big for localStorage, so they live in IndexedDB keyed by meal id.
@@ -228,6 +235,8 @@ var STRINGS = {
     calcHint: 'Uses the Mifflin–St Jeor formula. Optional — you can always set goals yourself above.',
     sexLabel: 'Sex', female: 'Female', male: 'Male',
     ageLabel: 'Age (years)', heightLabel: 'Height (cm)', weightLabel: 'Weight (kg)',
+    unitsLabel: 'Units', unitsMetric: 'Metric (cm / kg)', unitsImperial: 'Imperial (ft / lb)',
+    heightLabelImp: 'Height (ft / in)', weightLabelImp: 'Weight (lb)', feetPh: 'Feet', inchesPh: 'Inches',
     activityLabel: 'Activity',
     actSit: 'Mostly sitting', actLight: 'Light (walks, light chores)',
     actMod: 'Moderate (active most days)', actVery: 'Very active',
@@ -296,6 +305,8 @@ var STRINGS = {
     calcHint: 'Mifflin–St Jeor 공식을 사용합니다. 선택 사항이에요 — 위에서 직접 목표를 정할 수도 있습니다.',
     sexLabel: '성별', female: '여성', male: '남성',
     ageLabel: '나이 (세)', heightLabel: '키 (cm)', weightLabel: '몸무게 (kg)',
+    unitsLabel: '단위', unitsMetric: '미터법 (cm / kg)', unitsImperial: '피트·파운드 (ft / lb)',
+    heightLabelImp: '키 (피트 / 인치)', weightLabelImp: '몸무게 (lb)', feetPh: '피트', inchesPh: '인치',
     activityLabel: '활동량',
     actSit: '대부분 앉아 있음', actLight: '가벼움 (산책, 가벼운 집안일)',
     actMod: '보통 (대부분의 날 활동적)', actVery: '매우 활동적',
@@ -364,6 +375,8 @@ var STRINGS = {
     calcHint: 'Usa la fórmula de Mifflin–St Jeor. Es opcional: siempre puedes fijar tus metas arriba.',
     sexLabel: 'Sexo', female: 'Femenino', male: 'Masculino',
     ageLabel: 'Edad (años)', heightLabel: 'Altura (cm)', weightLabel: 'Peso (kg)',
+    unitsLabel: 'Unidades', unitsMetric: 'Métrico (cm / kg)', unitsImperial: 'Imperial (ft / lb)',
+    heightLabelImp: 'Altura (pies / pulgadas)', weightLabelImp: 'Peso (lb)', feetPh: 'Pies', inchesPh: 'Pulgadas',
     activityLabel: 'Actividad',
     actSit: 'Casi siempre sentado', actLight: 'Ligera (paseos, tareas ligeras)',
     actMod: 'Moderada (activo la mayoría de los días)', actVery: 'Muy activo',
@@ -426,6 +439,7 @@ function applyLanguage() {
     $('estimate-note').textContent = t('estimateNote');
   }
   refreshPhotoLabels();
+  renderUnits();
   renderToday();
   renderTrends();
   updateReview();
@@ -844,15 +858,93 @@ function renderTrends() {
 }
 
 /* ---------- Goals + calculator ---------- */
+/* Units: the profile is always stored in metric (cm / kg) and the goal
+   math below always reads metric. The units toggle only changes how
+   height and weight are shown and typed here; conversion happens at
+   this UI boundary (inches total × 2.54; lb × 0.45359237) and converted
+   values are rounded to 0.1 before they are stored or used. */
+var CM_PER_IN = 2.54, KG_PER_LB = 0.45359237;
+function round1(x) { return Math.round(x * 10) / 10; }
+function cmToFtIn(cm) {
+  var totalIn = cm / CM_PER_IN;
+  var ft = Math.floor(totalIn / 12);
+  var inch = Math.round(totalIn - ft * 12);
+  if (inch === 12) { ft += 1; inch = 0; }
+  return { ft: ft, inch: inch };
+}
+function ftInToCm(ft, inch) { return (ft * 12 + inch) * CM_PER_IN; }
+function kgToLb(kg) { return Math.round(kg / KG_PER_LB); }
+function lbToKg(lb) { return lb * KG_PER_LB; }
+function fillHeightFields(cm) {
+  $('c-height').value = cm;
+  var p = cmToFtIn(cm);
+  $('c-height-ft').value = p.ft;
+  $('c-height-in').value = p.inch;
+}
+function fillWeightFields(kg) {
+  $('c-weight').value = kg;
+  $('c-weight-lb').value = kgToLb(kg);
+}
+function renderUnits() {
+  var imp = units === 'imperial';
+  $('units-metric').classList.toggle('active', !imp);
+  $('units-imperial').classList.toggle('active', imp);
+  $('c-height-label').textContent = t('heightLabel');
+  $('c-height-imp-label').textContent = t('heightLabelImp');
+  $('c-weight-label').textContent = t('weightLabel');
+  $('c-weight-imp-label').textContent = t('weightLabelImp');
+  $('c-height-wrap').classList.toggle('hidden', imp);
+  $('c-height-imp-wrap').classList.toggle('hidden', !imp);
+  $('c-weight-wrap').classList.toggle('hidden', imp);
+  $('c-weight-imp-wrap').classList.toggle('hidden', !imp);
+}
+function setUnits(next) {
+  if (next !== units) {
+    /* Convert whatever is currently shown into the new mode's fields,
+       so switching modes never loses a typed value. */
+    if (next === 'imperial') {
+      var h = num($('c-height'));
+      if (h) fillHeightFields(h); else { $('c-height-ft').value = ''; $('c-height-in').value = ''; }
+      var w = num($('c-weight'));
+      $('c-weight-lb').value = w ? kgToLb(w) : '';
+    } else {
+      var ft = num($('c-height-ft')), inch = num($('c-height-in'));
+      $('c-height').value = (ft || inch) ? round1(ftInToCm(ft, inch)) : '';
+      var lb = num($('c-weight-lb'));
+      $('c-weight').value = lb ? round1(lbToKg(lb)) : '';
+    }
+    units = next;
+    try { localStorage.setItem(UNITS_KEY, units); } catch (e) {}
+  }
+  renderUnits();
+}
+$('units-metric').addEventListener('click', function () { setUnits('metric'); });
+$('units-imperial').addEventListener('click', function () { setUnits('imperial'); });
+/* Read height / weight as metric, whichever mode is showing. */
+function readHeightCm() {
+  if (units === 'imperial') {
+    var ft = num($('c-height-ft')), inch = num($('c-height-in'));
+    return (ft || inch) ? round1(ftInToCm(ft, inch)) : 0;
+  }
+  return num($('c-height'));
+}
+function readWeightKg() {
+  if (units === 'imperial') {
+    var lb = num($('c-weight-lb'));
+    return lb ? round1(lbToKg(lb)) : 0;
+  }
+  return num($('c-weight'));
+}
 function renderGoals() {
   $('g-carbs').value = goals.carbGoal;
   $('g-cal').value = goals.calGoal;
   if (profile.sex) $('c-sex').value = profile.sex;
   if (profile.age) $('c-age').value = profile.age;
-  if (profile.height) $('c-height').value = profile.height;
-  if (profile.weight) $('c-weight').value = profile.weight;
+  if (profile.height) fillHeightFields(profile.height);
+  if (profile.weight) fillWeightFields(profile.weight);
   if (profile.activity) $('c-activity').value = profile.activity;
   if (profile.aim) $('c-aim').value = profile.aim;
+  renderUnits();
 }
 $('goals-save').addEventListener('click', function () {
   var c = num($('g-carbs')), k = num($('g-cal'));
@@ -865,9 +957,9 @@ $('goals-save').addEventListener('click', function () {
 var lastSuggestion = null;
 $('calc-btn').addEventListener('click', function () {
   var sex = $('c-sex').value;
-  var age = num($('c-age')), h = num($('c-height')), w = num($('c-weight'));
+  var age = num($('c-age')), h = readHeightCm(), w = readWeightKg();
   var act = parseFloat($('c-activity').value), aim = parseFloat($('c-aim').value);
-  if (!age || !h || !w) {
+  if (!age || !h || !w || h < 100 || h > 250 || w < 30 || w > 300) {
     $('calc-result').textContent = t('calcFillIn');
     $('calc-use').classList.add('hidden');
     return;
