@@ -1,7 +1,7 @@
 /* MealSnap — standalone meal macro counter.
-   No sign-in: meals live in this phone's localStorage. The app's one
-   network call is the optional ✨ Calculate from photo (see the AI
-   photo calculation section below). */
+   No sign-in: meals live in this phone's localStorage. The app's only
+   network calls are the optional ✨ Calculate buttons — from photo or
+   from name (see the AI calculation section below). */
 'use strict';
 
 /* ---------- Built-in quick-pick foods (typical values per serving — always editable) ---------- */
@@ -192,11 +192,16 @@ var STRINGS = {
     takePhoto: '📷 Take a photo', pickGallery: '🖼️ Pick from gallery',
     changePhotoCam: '📷 Change photo', changePhotoGallery: '🖼️ Change photo',
     removePhoto: 'Remove photo', calcPhoto: '✨ Calculate from photo',
+    calcName: '✨ Calculate from name',
+    nameHint: 'Type a meal name above — add an amount if you can, like "1 bowl of rice and chicken" — then tap ✨ Calculate from name. The name you typed is sent to MealSnap\'s calculation service (which asks Google Gemini) only when you tap it. Prefer a photo? The ✨ Calculate from photo button is in the Photo section below — both work.',
     photoHint: "Take a photo or pick one from your gallery. Photos stay on this phone — a photo is sent to MealSnap's calculation service (which asks Google Gemini) only when you tap ✨ Calculate.",
     estimateNote: '✨ AI estimate — please check the numbers before saving.',
     looking: 'Looking at your meal…',
+    lookingName: 'Estimating from the name…',
     alertPhotoFail: 'Sorry, that photo could not be added. Please try another one.',
     alertNotFood: "That photo doesn't look like food — try a photo of your meal, or type the numbers in.",
+    alertNotFoodName: "That doesn't look like a food or drink name — check the meal name, or type the numbers in.",
+    alertNameEmpty: 'Type a meal name first — for example "1 bowl of rice and chicken" — then tap ✨ Calculate from name.',
     alertEstimateFail: "The estimate didn't work (check your connection) — you can still type the numbers in.",
     reviewLine: 'Is this right? {name}: {carbs}g carbs · {cal} cal — check the numbers, then save.',
     thisMeal: 'This meal',
@@ -233,7 +238,7 @@ var STRINGS = {
     calcSaved: 'Saved — your calorie goal is now {n} cal per day.',
     disclaimer: 'MealSnap is for information only. It does not diagnose, treat, or give medical advice. Please set your personal goals with your doctor or care team.',
     myDataTitle: 'My data',
-    myDataHint: "Your meals and meal photos are saved only on this phone. No account, no sign-in. Nothing is sent anywhere unless you tap ✨ Calculate from photo — then that one photo is sent to MealSnap's calculation service, which asks Google Gemini for an estimate.",
+    myDataHint: "Your meals and meal photos are saved only on this phone. No account, no sign-in. Nothing is sent anywhere unless you tap one of the ✨ Calculate buttons — then that one photo, or the meal name you typed, is sent to MealSnap's calculation service, which asks Google Gemini for an estimate.",
     deleteAllBtn: 'Delete all my data',
     wipeConfirm: 'Delete ALL your MealSnap data on this phone? This cannot be undone.',
     wipeDone: 'All MealSnap data on this phone has been deleted.',
@@ -255,11 +260,16 @@ var STRINGS = {
     takePhoto: '📷 사진 찍기', pickGallery: '🖼️ 갤러리에서 선택',
     changePhotoCam: '📷 사진 변경', changePhotoGallery: '🖼️ 사진 변경',
     removePhoto: '사진 삭제', calcPhoto: '✨ 사진으로 계산하기',
+    calcName: '✨ 이름으로 계산하기',
+    nameHint: '위에 식사 이름을 입력하세요 — "밥과 닭고기 1그릇"처럼 양을 함께 적으면 더 좋아요 — 그런 다음 ✨ 이름으로 계산하기를 누르세요. 입력한 이름은 버튼을 누를 때만 MealSnap 계산 서비스(Google Gemini에 문의)로 전송됩니다. 사진이 더 편하신가요? 아래 사진 섹션에 ✨ 사진으로 계산하기 버튼도 있습니다 — 둘 다 사용할 수 있어요.',
     photoHint: '사진을 찍거나 갤러리에서 선택하세요. 사진은 이 휴대폰에만 저장됩니다 — ✨ 계산하기를 누를 때만 사진이 MealSnap 계산 서비스(Google Gemini에 문의)로 전송됩니다.',
     estimateNote: '✨ AI 추정값입니다 — 저장하기 전에 숫자를 확인하세요.',
     looking: '식사를 살펴보는 중…',
+    lookingName: '이름으로 추정하는 중…',
     alertPhotoFail: '죄송합니다. 이 사진을 추가할 수 없습니다. 다른 사진으로 시도해 보세요.',
     alertNotFood: '이 사진은 음식으로 보이지 않아요 — 식사 사진을 사용하거나 숫자를 직접 입력해 보세요.',
+    alertNotFoodName: '음식이나 음료 이름으로 보이지 않아요 — 식사 이름을 확인하거나 숫자를 직접 입력해 보세요.',
+    alertNameEmpty: '먼저 식사 이름을 입력하세요 — 예: "밥과 닭고기 1그릇" — 그런 다음 ✨ 이름으로 계산하기를 눌러 주세요.',
     alertEstimateFail: '계산이 되지 않았습니다 (연결을 확인하세요) — 숫자를 직접 입력할 수 있습니다.',
     reviewLine: '맞나요? {name}: 탄수화물 {carbs}g · {cal}칼로리 — 숫자를 확인한 뒤 저장하세요.',
     thisMeal: '이 식사',
@@ -296,7 +306,7 @@ var STRINGS = {
     calcSaved: '저장되었습니다 — 이제 하루 칼로리 목표는 {n}칼로리입니다.',
     disclaimer: 'MealSnap은 정보 제공용입니다. 진단, 치료 또는 의학적 조언을 제공하지 않습니다. 개인 목표는 의사나 의료진과 상의해 정하세요.',
     myDataTitle: '내 데이터',
-    myDataHint: '식사와 식사 사진은 이 휴대폰에만 저장됩니다. 계정도, 로그인도 없습니다. ✨ 사진으로 계산하기를 누르지 않는 한 아무것도 전송되지 않습니다 — 누르면 그 사진 한 장이 MealSnap 계산 서비스로 전송되고, 서비스가 Google Gemini에 추정값을 요청합니다.',
+    myDataHint: '식사와 식사 사진은 이 휴대폰에만 저장됩니다. 계정도, 로그인도 없습니다. ✨ 계산하기 버튼 중 하나를 누르지 않는 한 아무것도 전송되지 않습니다 — 누르면 그 사진 또는 입력한 식사 이름이 MealSnap 계산 서비스로 전송되고, 서비스가 Google Gemini에 추정값을 요청합니다.',
     deleteAllBtn: '내 데이터 모두 삭제',
     wipeConfirm: '이 휴대폰의 MealSnap 데이터를 모두 삭제할까요? 되돌릴 수 없습니다.',
     wipeDone: '이 휴대폰의 MealSnap 데이터가 모두 삭제되었습니다.',
@@ -318,11 +328,16 @@ var STRINGS = {
     takePhoto: '📷 Tomar una foto', pickGallery: '🖼️ Elegir de la galería',
     changePhotoCam: '📷 Cambiar foto', changePhotoGallery: '🖼️ Cambiar foto',
     removePhoto: 'Quitar foto', calcPhoto: '✨ Calcular desde la foto',
+    calcName: '✨ Calcular desde el nombre',
+    nameHint: 'Escribe un nombre de comida arriba — añade una cantidad si puedes, como "1 tazón de arroz con pollo" — y luego toca ✨ Calcular desde el nombre. El nombre que escribiste se envía al servicio de cálculo de MealSnap (que consulta a Google Gemini) solo cuando lo tocas. ¿Prefieres una foto? El botón ✨ Calcular desde la foto está en la sección Foto, más abajo: ambos funcionan.',
     photoHint: 'Toma una foto o elige una de tu galería. Las fotos se quedan en este teléfono: una foto se envía al servicio de cálculo de MealSnap (que consulta a Google Gemini) solo cuando tocas ✨ Calcular.',
     estimateNote: '✨ Estimación de IA: revisa los números antes de guardar.',
     looking: 'Mirando tu comida…',
+    lookingName: 'Estimando desde el nombre…',
     alertPhotoFail: 'Lo sentimos, no se pudo añadir esa foto. Prueba con otra.',
     alertNotFood: 'Esa foto no parece comida: prueba con una foto de tu comida o escribe los números.',
+    alertNotFoodName: 'Eso no parece el nombre de una comida o bebida: revisa el nombre o escribe los números.',
+    alertNameEmpty: 'Primero escribe un nombre de comida — por ejemplo, "1 tazón de arroz con pollo" — y luego toca ✨ Calcular desde el nombre.',
     alertEstimateFail: 'La estimación no funcionó (revisa tu conexión); aún puedes escribir los números.',
     reviewLine: '¿Está bien? {name}: {carbs} g de carbohidratos · {cal} cal — revisa los números y guarda.',
     thisMeal: 'Esta comida',
@@ -359,7 +374,7 @@ var STRINGS = {
     calcSaved: 'Guardado: tu meta de calorías ahora es de {n} cal por día.',
     disclaimer: 'MealSnap es solo con fines informativos. No diagnostica, no trata ni da consejos médicos. Define tus metas personales con tu médico o equipo de salud.',
     myDataTitle: 'Mis datos',
-    myDataHint: 'Tus comidas y las fotos de tus comidas se guardan solo en este teléfono. Sin cuenta y sin inicio de sesión. No se envía nada a menos que toques ✨ Calcular desde la foto: entonces esa única foto se envía al servicio de cálculo de MealSnap, que pide una estimación a Google Gemini.',
+    myDataHint: 'Tus comidas y las fotos de tus comidas se guardan solo en este teléfono. Sin cuenta y sin inicio de sesión. No se envía nada a menos que toques uno de los botones ✨ Calcular: entonces esa única foto, o el nombre de comida que escribiste, se envía al servicio de cálculo de MealSnap, que pide una estimación a Google Gemini.',
     deleteAllBtn: 'Borrar todos mis datos',
     wipeConfirm: '¿Borrar TODOS tus datos de MealSnap en este teléfono? No se puede deshacer.',
     wipeDone: 'Todos los datos de MealSnap en este teléfono han sido borrados.',
@@ -390,6 +405,7 @@ function refreshPhotoLabels() {
   $('photo-cam-label').textContent = has ? t('changePhotoCam') : t('takePhoto');
   $('photo-remove').textContent = t('removePhoto');
   $('photo-estimate').textContent = t('calcPhoto');
+  $('name-estimate').textContent = t('calcName');
 }
 function applyLanguage() {
   document.documentElement.lang = lang;
@@ -579,15 +595,18 @@ $('photo-remove').addEventListener('click', function () {
   setPhotoPreview(null);
 });
 
-/* ---------- AI photo calculation (server version — NO key in the app) ----------
-   When the user taps "✨ Calculate from photo", the photo is POSTed to
-   MealSnap's own calculation service — a Google Apps Script web app that
-   holds the Google Gemini key server-side and forwards the photo to
-   Gemini (the estimator prompt lives in the proxy too). The app contains
-   no API key and the user needs none. Nothing is sent anywhere until she
-   taps Calculate, and only that one photo goes. The estimated numbers
-   fill the form, always editable, and if anything goes wrong she can
-   still type the numbers in as before.
+/* ---------- AI calculation (server version — NO key in the app) ----------
+   The Add form has TWO calculate buttons, side by side on the same form:
+   - "✨ Calculate from photo" POSTs the meal photo, and
+   - "✨ Calculate from name" POSTs the meal name/description she typed.
+   Both go to MealSnap's own calculation service — a Google Apps Script
+   web app that holds the Google Gemini key server-side and forwards the
+   request to Gemini (the estimator prompts live in the proxy too). The
+   app contains no API key and the user needs none. Nothing is sent
+   anywhere until she taps a Calculate button, and only that one photo
+   or that one typed name goes. Both paths return the same JSON shape,
+   and the estimated numbers fill the form, always editable; if anything
+   goes wrong she can still type the numbers in as before.
    Proxy source: ~/workspace/mealsnap/proxy/Code.gs — the endpoint URL
    below is filled in when the proxy is deployed (see DEPLOY-GUIDE.md). */
 var ESTIMATE_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxQ1WuZZLfffC0GLoGmg-HnwpzsYP5LjbsqTMpFKFfAOunJuRX0BuBG3J_auNNcHDuJ6Q/exec';
@@ -610,21 +629,30 @@ function blobToBase64(blob) {
     reader.readAsDataURL(blob);
   });
 }
-/* Ask the calculation service for an estimate of the photo (base64 JPEG)
-   and resolve with its parsed JSON: either the estimate object
+/* Ask the calculation service for an estimate and resolve with its
+   parsed JSON: either the estimate object
    {name, calories, carbs_g, protein_g, fat_g, fiber_g, sugar_g},
    {error: 'not_food'}, or another {error: ...} object.
+   The payload distinguishes the two paths: {image, mimeType} for the
+   photo path, {text} for the name path.
    The Content-Type is text/plain on purpose: Apps Script web apps don't
    answer CORS preflights, and a "simple" request avoids the preflight;
    Apps Script replies with a redirect that fetch follows to the JSON. */
-function proxyEstimate(base64) {
+function proxyEstimate(payload) {
   return fetch(ESTIMATE_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ image: base64, mimeType: 'image/jpeg' })
+    body: JSON.stringify(payload)
   }).then(function (res) {
     if (!res.ok) throw new Error('Estimate service failed (' + res.status + ')');
     return res.json();
+  });
+}
+/* Fill the form's number fields from an estimate object (both paths). */
+function fillEstimateNumbers(data) {
+  setFormValues({
+    cal: data.calories || 0, carbs: data.carbs_g || 0, protein: data.protein_g || 0,
+    fat: data.fat_g || 0, fiber: data.fiber_g || 0, sugar: data.sugar_g || 0
   });
 }
 $('photo-estimate').addEventListener('click', function () {
@@ -635,7 +663,7 @@ $('photo-estimate').addEventListener('click', function () {
   btn.textContent = t('looking');
   hideEstimateNote();
   blobToBase64(currentPhotoBlob).then(function (b64) {
-    return proxyEstimate(b64);
+    return proxyEstimate({ image: b64, mimeType: 'image/jpeg' });
   }).then(function (data) {
     if (data && data.error === 'not_food') {
       alert(t('alertNotFood'));
@@ -643,10 +671,39 @@ $('photo-estimate').addEventListener('click', function () {
     }
     if (!data || data.error || typeof data.calories === 'undefined') throw new Error('Bad estimate');
     if (data.name) $('f-name').value = data.name;
-    setFormValues({
-      cal: data.calories || 0, carbs: data.carbs_g || 0, protein: data.protein_g || 0,
-      fat: data.fat_g || 0, fiber: data.fiber_g || 0, sugar: data.sugar_g || 0
-    });
+    fillEstimateNumbers(data);
+    showEstimateNote();
+  }).catch(function () {
+    alert(t('alertEstimateFail'));
+  }).then(function () {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  });
+});
+/* "✨ Calculate from name": POST the meal name/description she typed.
+   On success only the number fields are filled — the name field keeps
+   exactly what she typed (her words for her meal; the estimate's name
+   is not obviously better and silently replacing her text would be a
+   surprise). The estimate note still tells her to check the numbers. */
+$('name-estimate').addEventListener('click', function () {
+  var name = $('f-name').value.trim();
+  if (!name) {
+    alert(t('alertNameEmpty'));
+    $('f-name').focus();
+    return;
+  }
+  var btn = $('name-estimate');
+  var oldText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t('lookingName');
+  hideEstimateNote();
+  proxyEstimate({ text: name }).then(function (data) {
+    if (data && data.error === 'not_food') {
+      alert(t('alertNotFoodName'));
+      return;
+    }
+    if (!data || data.error || typeof data.calories === 'undefined') throw new Error('Bad estimate');
+    fillEstimateNumbers(data);
     showEstimateNote();
   }).catch(function () {
     alert(t('alertEstimateFail'));
