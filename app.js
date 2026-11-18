@@ -60,6 +60,29 @@ var units = (function () {
   try { return localStorage.getItem(UNITS_KEY) === 'imperial' ? 'imperial' : 'metric'; } catch (e) { return 'metric'; }
 })();
 
+/* Portion quantity + unit for a meal entry (e.g. 2 slices of bread).
+   Descriptive only: they say how much the entry is and are NEVER used
+   to scale the nutrition numbers the user typed or the service
+   estimated. The last unit used is remembered on this phone (same
+   pattern as the units preference above); the quantity itself always
+   starts again at 1 for a new entry. */
+var FOOD_UNIT_KEY = 'mealsnap.foodunit.v1';
+var FOOD_UNITS = ['piece', 'slice', 'cup', 'tbsp', 'tsp', 'ml', 'floz', 'g', 'bowl', 'serving'];
+var DEFAULT_FOOD_UNIT = 'serving';
+/* The words sent to the calculation service are always these English
+   unit words, whatever language the screen is in (the service's
+   prompts are written for English amounts). */
+var UNIT_SERVER_WORD = {
+  piece: 'piece', slice: 'slice', cup: 'cup', tbsp: 'tablespoon', tsp: 'teaspoon',
+  ml: 'ml', floz: 'fl oz', g: 'g', bowl: 'bowl', serving: 'serving'
+};
+var lastFoodUnit = (function () {
+  try {
+    var u = localStorage.getItem(FOOD_UNIT_KEY);
+    return FOOD_UNITS.indexOf(u) >= 0 ? u : DEFAULT_FOOD_UNIT;
+  } catch (e) { return DEFAULT_FOOD_UNIT; }
+})();
+
 /* ---------- Meal photos (IndexedDB — one photo per meal, on this phone only) ----------
    Photos are too big for localStorage, so they live in IndexedDB keyed by meal id.
    Nothing is uploaded from here (the one send in the app is the explicit
@@ -194,6 +217,17 @@ var STRINGS = {
     mealName: 'Meal name', mealNamePh: 'e.g. Rice and chicken',
     mealType: 'Meal', typeBreakfast: 'Breakfast', typeLunch: 'Lunch', typeDinner: 'Dinner', typeSnack: 'Snack',
     servings: 'Servings',
+    qtyLabel: 'Quantity', unitLabel: 'Unit',
+    unitPiece: 'piece', unitPiecePl: 'pieces',
+    unitSlice: 'slice', unitSlicePl: 'slices',
+    unitCup: 'cup', unitCupPl: 'cups',
+    unitTbsp: 'tablespoon', unitTbspPl: 'tablespoons',
+    unitTsp: 'teaspoon', unitTspPl: 'teaspoons',
+    unitMl: 'ml', unitMlPl: 'ml',
+    unitFloz: 'fl oz', unitFlozPl: 'fl oz',
+    unitG: 'g', unitGPl: 'g',
+    unitBowl: 'bowl', unitBowlPl: 'bowls',
+    unitServing: 'serving', unitServingPl: 'servings',
     fCalories: 'Calories', fCarbs: 'Carbs (g)', fProtein: 'Protein (g)', fFat: 'Fat (g)', fFiber: 'Fiber (g)', fSugar: 'Sugar (g)',
     photoOptional: 'Photo (optional)',
     takePhoto: '📷 Take a photo', pickGallery: '🖼️ Pick from gallery',
@@ -210,6 +244,7 @@ var STRINGS = {
     alertNotFoodName: "That doesn't look like a food or drink name — check the meal name, or type the numbers in.",
     alertNameEmpty: 'Type a meal name first — for example "1 bowl of rice and chicken" — then tap ✨ Calculate from name.',
     alertEstimateFail: "The estimate didn't work (check your connection) — you can still type the numbers in.",
+    alertEstimateBusy: 'The calculation service is busy right now — wait a moment and try again. You can still type the numbers in.',
     reviewLine: 'Is this right? {name}: {carbs}g carbs · {cal} cal — check the numbers, then save.',
     thisMeal: 'This meal',
     addMeal: 'Add a meal', editMeal: 'Edit meal',
@@ -264,6 +299,17 @@ var STRINGS = {
     mealName: '식사 이름', mealNamePh: '예: 밥과 닭고기',
     mealType: '식사', typeBreakfast: '아침', typeLunch: '점심', typeDinner: '저녁', typeSnack: '간식',
     servings: '인분',
+    qtyLabel: '양', unitLabel: '단위',
+    unitPiece: '개', unitPiecePl: '개',
+    unitSlice: '조각', unitSlicePl: '조각',
+    unitCup: '컵', unitCupPl: '컵',
+    unitTbsp: '큰술', unitTbspPl: '큰술',
+    unitTsp: '작은술', unitTspPl: '작은술',
+    unitMl: 'ml', unitMlPl: 'ml',
+    unitFloz: 'fl oz', unitFlozPl: 'fl oz',
+    unitG: 'g', unitGPl: 'g',
+    unitBowl: '그릇', unitBowlPl: '그릇',
+    unitServing: '인분', unitServingPl: '인분',
     fCalories: '칼로리', fCarbs: '탄수화물 (g)', fProtein: '단백질 (g)', fFat: '지방 (g)', fFiber: '식이섬유 (g)', fSugar: '당류 (g)',
     photoOptional: '사진 (선택)',
     takePhoto: '📷 사진 찍기', pickGallery: '🖼️ 갤러리에서 선택',
@@ -280,6 +326,7 @@ var STRINGS = {
     alertNotFoodName: '음식이나 음료 이름으로 보이지 않아요 — 식사 이름을 확인하거나 숫자를 직접 입력해 보세요.',
     alertNameEmpty: '먼저 식사 이름을 입력하세요 — 예: "밥과 닭고기 1그릇" — 그런 다음 ✨ 이름으로 계산하기를 눌러 주세요.',
     alertEstimateFail: '계산이 되지 않았습니다 (연결을 확인하세요) — 숫자를 직접 입력할 수 있습니다.',
+    alertEstimateBusy: '계산 서비스가 지금 바쁩니다 — 잠시 기다렸다가 다시 시도해 주세요. 숫자를 직접 입력할 수도 있습니다.',
     reviewLine: '맞나요? {name}: 탄수화물 {carbs}g · {cal}칼로리 — 숫자를 확인한 뒤 저장하세요.',
     thisMeal: '이 식사',
     addMeal: '식사 추가', editMeal: '식사 수정',
@@ -334,6 +381,17 @@ var STRINGS = {
     mealName: 'Nombre de la comida', mealNamePh: 'ej.: arroz con pollo',
     mealType: 'Comida', typeBreakfast: 'Desayuno', typeLunch: 'Almuerzo', typeDinner: 'Cena', typeSnack: 'Merienda',
     servings: 'Porciones',
+    qtyLabel: 'Cantidad', unitLabel: 'Unidad',
+    unitPiece: 'pieza', unitPiecePl: 'piezas',
+    unitSlice: 'rebanada', unitSlicePl: 'rebanadas',
+    unitCup: 'taza', unitCupPl: 'tazas',
+    unitTbsp: 'cucharada', unitTbspPl: 'cucharadas',
+    unitTsp: 'cucharadita', unitTspPl: 'cucharaditas',
+    unitMl: 'ml', unitMlPl: 'ml',
+    unitFloz: 'fl oz', unitFlozPl: 'fl oz',
+    unitG: 'g', unitGPl: 'g',
+    unitBowl: 'tazón', unitBowlPl: 'tazones',
+    unitServing: 'porción', unitServingPl: 'porciones',
     fCalories: 'Calorías', fCarbs: 'Carbohidratos (g)', fProtein: 'Proteínas (g)', fFat: 'Grasas (g)', fFiber: 'Fibra (g)', fSugar: 'Azúcar (g)',
     photoOptional: 'Foto (opcional)',
     takePhoto: '📷 Tomar una foto', pickGallery: '🖼️ Elegir de la galería',
@@ -350,6 +408,7 @@ var STRINGS = {
     alertNotFoodName: 'Eso no parece el nombre de una comida o bebida: revisa el nombre o escribe los números.',
     alertNameEmpty: 'Primero escribe un nombre de comida — por ejemplo, "1 tazón de arroz con pollo" — y luego toca ✨ Calcular desde el nombre.',
     alertEstimateFail: 'La estimación no funcionó (revisa tu conexión); aún puedes escribir los números.',
+    alertEstimateBusy: 'El servicio de cálculo está ocupado ahora mismo — espera un momento e inténtalo de nuevo. Aún puedes escribir los números.',
     reviewLine: '¿Está bien? {name}: {carbs} g de carbohidratos · {cal} cal — revisa los números y guarda.',
     thisMeal: 'Esta comida',
     addMeal: 'Añadir una comida', editMeal: 'Editar comida',
@@ -492,10 +551,11 @@ function renderToday() {
   var todays = mealsOn(todayKey());
   $('meal-empty').style.display = todays.length ? 'none' : 'block';
   list.innerHTML = todays.map(function (m) {
+    var qtyUnit = formatQtyUnit(m);
     return '<div class="meal-card">' +
       '<img class="meal-thumb hidden" data-thumb="' + m.id + '" alt="' + esc(fill(t('photoAlt'), { name: m.name })) + '">' +
       '<div class="meal-body">' +
-      '<div class="meal-top"><span class="meal-name">' + esc(m.name) + '</span>' +
+      '<div class="meal-top"><span class="meal-name">' + (qtyUnit ? esc(qtyUnit) + ' · ' : '') + esc(m.name) + '</span>' +
       '<span class="meal-type">' + esc(typeLabel(m.type)) + '</span></div>' +
       '<div class="meal-macros"><strong>' + fill(t('macrosHead'), { carbs: round(m.carbs) }) + '</strong>' +
       fill(t('macrosRest'), { cal: round(m.cal), protein: round(m.protein), fat: round(m.fat) }) +
@@ -652,15 +712,56 @@ function blobToBase64(blob) {
    The Content-Type is text/plain on purpose: Apps Script web apps don't
    answer CORS preflights, and a "simple" request avoids the preflight;
    Apps Script replies with a redirect that fetch follows to the JSON. */
+/* A failure answered BY the service — an {error: ...} payload or an
+   HTTP error status — is not a connection problem: Gemini's per-minute
+   rate limit (HTTP 429 from the proxy) looks exactly like one, and the
+   old "check your connection" message sent people hunting for a signal
+   problem that wasn't there. Service answers get the "busy" message;
+   only a fetch that never got an answer (offline, no signal) keeps the
+   connection message. Errors from the service are tagged so the catch
+   handlers below can tell the two apart. */
+function serviceError() {
+  var e = new Error('Estimate service error');
+  e.serviceError = true;
+  return e;
+}
 function proxyEstimate(payload) {
   return fetch(ESTIMATE_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload)
   }).then(function (res) {
-    if (!res.ok) throw new Error('Estimate service failed (' + res.status + ')');
-    return res.json();
+    if (!res.ok) throw serviceError();
+    return res.json().catch(function () { throw serviceError(); });
   });
+}
+/* ---------- Portion quantity + unit (form side) ---------- */
+function unitLabelKey(unit) { return 'unit' + unit.charAt(0).toUpperCase() + unit.slice(1); }
+/* Read the form's quantity + unit. A blank or non-positive quantity
+   falls back to 1; an unknown unit falls back to the default. */
+function readQtyUnit() {
+  var q = parseFloat($('f-qty').value);
+  if (isNaN(q) || q <= 0) q = 1;
+  var u = $('f-unit').value;
+  if (FOOD_UNITS.indexOf(u) < 0) u = DEFAULT_FOOD_UNIT;
+  return { qty: q, unit: u };
+}
+/* The text sent for a name calculation: "<qty> <unit> of <name>" with
+   English unit words whenever quantity/unit differ from the defaults
+   (1 serving); at the defaults the typed name goes exactly as-is, as
+   it did before this feature existed. The stored meal name always
+   keeps the user's typed words — qty/unit live in their own fields. */
+function composeEstimateText(name, qu) {
+  if (qu.qty === 1 && qu.unit === DEFAULT_FOOD_UNIT) return name;
+  return qu.qty + ' ' + UNIT_SERVER_WORD[qu.unit] + ' of ' + name;
+}
+/* "2 slices" / "1 컵" prefix for a stored meal, in the screen language
+   (plural label when the quantity isn't 1; Korean labels don't change
+   form). Meals saved before this feature have no qty/unit and show no
+   prefix. */
+function formatQtyUnit(m) {
+  if (!m || typeof m.qty !== 'number' || FOOD_UNITS.indexOf(m.unit) < 0) return '';
+  return m.qty + ' ' + t(unitLabelKey(m.unit) + (m.qty !== 1 ? 'Pl' : ''));
 }
 /* Fill the form's number fields from an estimate object (both paths). */
 function fillEstimateNumbers(data) {
@@ -683,12 +784,12 @@ $('photo-estimate').addEventListener('click', function () {
       alert(t('alertNotFood'));
       return;
     }
-    if (!data || data.error || typeof data.calories === 'undefined') throw new Error('Bad estimate');
+    if (!data || data.error || typeof data.calories === 'undefined') throw serviceError();
     if (data.name) $('f-name').value = data.name;
     fillEstimateNumbers(data);
     showEstimateNote();
-  }).catch(function () {
-    alert(t('alertEstimateFail'));
+  }).catch(function (err) {
+    alert(t(err && err.serviceError ? 'alertEstimateBusy' : 'alertEstimateFail'));
   }).then(function () {
     btn.disabled = false;
     btn.textContent = oldText;
@@ -711,16 +812,16 @@ $('name-estimate').addEventListener('click', function () {
   btn.disabled = true;
   btn.textContent = t('lookingName');
   hideEstimateNote();
-  proxyEstimate({ text: name }).then(function (data) {
+  proxyEstimate({ text: composeEstimateText(name, readQtyUnit()) }).then(function (data) {
     if (data && data.error === 'not_food') {
       alert(t('alertNotFoodName'));
       return;
     }
-    if (!data || data.error || typeof data.calories === 'undefined') throw new Error('Bad estimate');
+    if (!data || data.error || typeof data.calories === 'undefined') throw serviceError();
     fillEstimateNumbers(data);
     showEstimateNote();
-  }).catch(function () {
-    alert(t('alertEstimateFail'));
+  }).catch(function (err) {
+    alert(t(err && err.serviceError ? 'alertEstimateBusy' : 'alertEstimateFail'));
   }).then(function () {
     btn.disabled = false;
     btn.textContent = oldText;
@@ -747,6 +848,9 @@ function resetForm() {
   $('save-btn').textContent = t('saveMeal');
   $('meal-form').reset();
   $('f-servings').value = 1;
+  /* Quantity always restarts at 1; the unit restarts at the last one used. */
+  $('f-qty').value = 1;
+  $('f-unit').value = lastFoodUnit;
   setFormValues({ cal: 0, carbs: 0, protein: 0, fat: 0, fiber: 0, sugar: 0 });
 }
 function startEdit(id) {
@@ -760,6 +864,8 @@ function startEdit(id) {
   $('f-name').value = m.name;
   $('f-type').value = m.type;
   $('f-servings').value = 1;
+  $('f-qty').value = (typeof m.qty === 'number' && m.qty > 0) ? m.qty : 1;
+  $('f-unit').value = FOOD_UNITS.indexOf(m.unit) >= 0 ? m.unit : DEFAULT_FOOD_UNIT;
   setFormValues(m);
   var editId = m.id;
   photoGet(m.id).then(function (blob) {
@@ -787,11 +893,15 @@ $('meal-form').addEventListener('submit', function (e) {
   e.preventDefault();
   var name = $('f-name').value.trim();
   if (!name) { $('f-name').focus(); return; }
+  var qu = readQtyUnit();
   var values = {
-    name: name, type: $('f-type').value,
+    name: name, type: $('f-type').value, qty: qu.qty, unit: qu.unit,
     cal: num($('f-cal')), carbs: num($('f-carbs')), protein: num($('f-protein')),
     fat: num($('f-fat')), fiber: num($('f-fiber')), sugar: num($('f-sugar'))
   };
+  /* Remember this unit for the next entry (quantity still resets to 1). */
+  lastFoodUnit = qu.unit;
+  try { localStorage.setItem(FOOD_UNIT_KEY, qu.unit); } catch (e) {}
   var savedId;
   if (editingId !== null) {
     savedId = editingId;
