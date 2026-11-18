@@ -56,6 +56,27 @@
         <span data-i18n="mealName">Meal name</span>
         <input type="text" id="f-name" required placeholder="e.g. Rice and chicken" data-i18n-ph="mealNamePh">
       </label>
+      <div class="field-row">
+        <label class="field">
+          <span data-i18n="qtyLabel">Quantity</span>
+          <input type="number" id="f-qty" value="1" min="0.1" step="any">
+        </label>
+        <label class="field">
+          <span data-i18n="unitLabel">Unit</span>
+          <select id="f-unit">
+            <option value="piece" data-i18n="unitPiece">piece</option>
+            <option value="slice" data-i18n="unitSlice">slice</option>
+            <option value="cup" data-i18n="unitCup">cup</option>
+            <option value="tbsp" data-i18n="unitTbsp">tablespoon</option>
+            <option value="tsp" data-i18n="unitTsp">teaspoon</option>
+            <option value="ml" data-i18n="unitMl">ml</option>
+            <option value="floz" data-i18n="unitFloz">fl oz</option>
+            <option value="g" data-i18n="unitG">g</option>
+            <option value="bowl" data-i18n="unitBowl">bowl</option>
+            <option value="serving" data-i18n="unitServing">serving</option>
+          </select>
+        </label>
+      </div>
       <button type="button" class="btn-estimate" id="name-estimate">✨ Calculate from name</button>
       <p class="hint" data-i18n="nameHint">Type a meal name above — add an amount if you can, like "1 bowl of rice and chicken" — then tap ✨ Calculate from name. The name you typed is sent to MealSnap's calculation service (which asks Google Gemini) only when you tap it. Prefer a photo? The ✨ Calculate from photo button is in the Photo section below — both work.</p>
       <div class="field-row">
