@@ -83,6 +83,22 @@ var lastFoodUnit = (function () {
   } catch (e) { return DEFAULT_FOOD_UNIT; }
 })();
 
+/* ---------- My Foods (foods remembered from the Add form) ----------
+   Every NEW meal saved from the Add form is remembered here — its name,
+   quantity/unit and the numbers as saved — so a food she eats often can
+   be re-added to today with one tap, no typing and no calculation call.
+   Stored on this phone only, like the meals themselves. The list is
+   capped; the section on the Add screen is collapsible and starts
+   collapsed, and whether she left it open is remembered on this phone. */
+var MYFOODS_KEY = 'mealsnap.myfoods.v1';
+var MYFOODS_OPEN_KEY = 'mealsnap.myfoods.open.v1';
+var MYFOODS_CAP = 50;
+var myFoods = loadJSON(MYFOODS_KEY, []);
+if (!Array.isArray(myFoods)) myFoods = [];
+var myFoodsOpen = (function () {
+  try { return localStorage.getItem(MYFOODS_OPEN_KEY) === '1'; } catch (e) { return false; }
+})();
+
 /* ---------- Meal photos (IndexedDB — one photo per meal, on this phone only) ----------
    Photos are too big for localStorage, so they live in IndexedDB keyed by meal id.
    Nothing is uploaded from here (the one send in the app is the explicit
@@ -218,6 +234,8 @@ var STRINGS = {
     mealType: 'Meal', typeBreakfast: 'Breakfast', typeLunch: 'Lunch', typeDinner: 'Dinner', typeSnack: 'Snack',
     servings: 'Servings',
     qtyLabel: 'Quantity', unitLabel: 'Unit',
+    myFoods: 'My Foods', myFoodsCal: '{n} kcal',
+    myFoodsFav: 'Favorite', myFoodsAddBtn: 'Add to today', myFoodsDelete: 'Remove from My Foods',
     unitPiece: 'piece', unitPiecePl: 'pieces',
     unitSlice: 'slice', unitSlicePl: 'slices',
     unitCup: 'cup', unitCupPl: 'cups',
@@ -300,6 +318,8 @@ var STRINGS = {
     mealType: '식사', typeBreakfast: '아침', typeLunch: '점심', typeDinner: '저녁', typeSnack: '간식',
     servings: '인분',
     qtyLabel: '양', unitLabel: '단위',
+    myFoods: '내 음식', myFoodsCal: '{n} kcal',
+    myFoodsFav: '즐겨찾기', myFoodsAddBtn: '오늘에 추가', myFoodsDelete: '내 음식에서 삭제',
     unitPiece: '개', unitPiecePl: '개',
     unitSlice: '조각', unitSlicePl: '조각',
     unitCup: '컵', unitCupPl: '컵',
@@ -382,6 +402,8 @@ var STRINGS = {
     mealType: 'Comida', typeBreakfast: 'Desayuno', typeLunch: 'Almuerzo', typeDinner: 'Cena', typeSnack: 'Merienda',
     servings: 'Porciones',
     qtyLabel: 'Cantidad', unitLabel: 'Unidad',
+    myFoods: 'Mis comidas', myFoodsCal: '{n} kcal',
+    myFoodsFav: 'Favorito', myFoodsAddBtn: 'Añadir a hoy', myFoodsDelete: 'Quitar de Mis comidas',
     unitPiece: 'pieza', unitPiecePl: 'piezas',
     unitSlice: 'rebanada', unitSlicePl: 'rebanadas',
     unitCup: 'taza', unitCupPl: 'tazas',
@@ -501,6 +523,7 @@ function applyLanguage() {
   renderUnits();
   renderToday();
   renderTrends();
+  renderMyFoods();
   updateReview();
 }
 
@@ -514,6 +537,7 @@ function showView(name) {
     t.classList.toggle('active', t.getAttribute('data-view') === name);
   });
   if (name === 'today') renderToday();
+  if (name === 'add') renderMyFoods();
   if (name === 'trends') renderTrends();
   if (name === 'goals') renderGoals();
   window.scrollTo(0, 0);
@@ -913,6 +937,9 @@ $('meal-form').addEventListener('submit', function (e) {
     values.time = now.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' });
     savedId = values.id;
     meals.push(values);
+    /* Remember the food for My Foods. New meals only: re-saving an edit
+       does not change the remembered list (v1 scope). */
+    rememberMyFood(values);
   }
   saveJSON(MEALS_KEY, meals);
   if (pendingPhotoBlob) photoPut(savedId, pendingPhotoBlob);
@@ -920,6 +947,143 @@ $('meal-form').addEventListener('submit', function (e) {
   clearPhotoState();
   editingId = null;
   showView('today');
+});
+
+/* ---------- My Foods ---------- */
+/* One saved food is the same food as another when the name (ignoring
+   case and surrounding spaces), quantity and unit all match. */
+function myFoodKey(name, qty, unit) {
+  return String(name).trim().toLowerCase() + '|' + qty + '|' + unit;
+}
+function saveMyFoods() { saveJSON(MYFOODS_KEY, myFoods); }
+/* Display order: favorites first, then most recently used first. */
+function sortedMyFoods() {
+  return myFoods.slice().sort(function (a, b) {
+    if (!!a.favorite !== !!b.favorite) return a.favorite ? -1 : 1;
+    return (b.lastUsed || 0) - (a.lastUsed || 0);
+  });
+}
+/* Remember a just-saved meal. Saving the same food again refreshes its
+   numbers and recency instead of adding a second entry. When the list
+   outgrows the cap, the least recently used non-favorites go first. */
+function rememberMyFood(values) {
+  var key = myFoodKey(values.name, values.qty, values.unit);
+  var found = null;
+  myFoods.forEach(function (f) {
+    if (myFoodKey(f.name, f.qty, f.unit) === key) found = f;
+  });
+  if (found) {
+    found.calories = values.cal; found.carbs_g = values.carbs;
+    found.protein_g = values.protein; found.fat_g = values.fat;
+    found.fiber_g = values.fiber; found.sugar_g = values.sugar;
+    found.lastUsed = Date.now();
+    found.useCount = (found.useCount || 0) + 1;
+  } else {
+    myFoods.push({
+      name: values.name, qty: values.qty, unit: values.unit,
+      calories: values.cal, carbs_g: values.carbs, protein_g: values.protein,
+      fat_g: values.fat, fiber_g: values.fiber, sugar_g: values.sugar,
+      favorite: false, lastUsed: Date.now(), useCount: 1
+    });
+    while (myFoods.length > MYFOODS_CAP) {
+      var evict = -1, oldest = Infinity;
+      myFoods.forEach(function (f, i) {
+        if (!f.favorite && (f.lastUsed || 0) < oldest) { oldest = f.lastUsed || 0; evict = i; }
+      });
+      if (evict < 0) { /* every entry is a favorite — evict the oldest overall */
+        evict = 0;
+        myFoods.forEach(function (f, i) {
+          if ((f.lastUsed || 0) < (myFoods[evict].lastUsed || 0)) evict = i;
+        });
+      }
+      myFoods.splice(evict, 1);
+    }
+  }
+  saveMyFoods();
+  renderMyFoods();
+}
+/* One tap on a saved food's + : log it for today with exactly the saved
+   name, quantity/unit and numbers — the same meal record shape a manual
+   save makes (the meal type is whatever the form's Meal select is
+   currently set to). No calculation call. Same feedback as a normal
+   save: land back on Today with the meal in the list. */
+function addMyFoodToToday(entry) {
+  var now = new Date();
+  var meal = {
+    id: Date.now(),
+    date: todayKey(),
+    time: now.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' }),
+    name: entry.name, type: $('f-type').value,
+    qty: entry.qty, unit: entry.unit,
+    cal: entry.calories, carbs: entry.carbs_g, protein: entry.protein_g,
+    fat: entry.fat_g, fiber: entry.fiber_g, sugar: entry.sugar_g
+  };
+  meals.push(meal);
+  saveJSON(MEALS_KEY, meals);
+  entry.lastUsed = Date.now();
+  entry.useCount = (entry.useCount || 0) + 1;
+  saveMyFoods();
+  renderMyFoods();
+  showView('today');
+}
+function renderMyFoods() {
+  var wrap = $('myfoods');
+  if (!wrap) return;
+  var list = sortedMyFoods();
+  /* No saved foods yet: the whole section stays hidden, so a new user
+     never sees an empty box on the Add screen. */
+  if (!list.length) {
+    wrap.classList.add('hidden');
+    $('myfoods-list').innerHTML = '';
+    return;
+  }
+  wrap.classList.remove('hidden');
+  $('myfoods-count').textContent = list.length;
+  $('myfoods-arrow').textContent = myFoodsOpen ? '▾' : '▸';
+  $('myfoods-toggle').setAttribute('aria-expanded', myFoodsOpen ? 'true' : 'false');
+  var listEl = $('myfoods-list');
+  listEl.classList.toggle('hidden', !myFoodsOpen);
+  if (!myFoodsOpen) { listEl.innerHTML = ''; return; }
+  listEl.innerHTML = list.map(function (f, i) {
+    var qu = formatQtyUnit(f);
+    return '<div class="myfood-row">' +
+      '<button type="button" class="myfood-fav" data-mf-fav="' + i + '" aria-label="' + esc(t('myFoodsFav')) + '">' + (f.favorite ? '⭐' : '☆') + '</button>' +
+      '<span class="myfood-main"><span class="myfood-name">' + esc(f.name) + '</span>' +
+      (qu ? '<span class="myfood-qu"> · ' + esc(qu) + '</span>' : '') + '</span>' +
+      '<span class="myfood-cal">' + fill(t('myFoodsCal'), { n: round(f.calories) }) + '</span>' +
+      '<button type="button" class="myfood-add" data-mf-add="' + i + '" aria-label="' + esc(t('myFoodsAddBtn')) + '">+</button>' +
+      '<button type="button" class="myfood-del" data-mf-del="' + i + '" aria-label="' + esc(t('myFoodsDelete')) + '">×</button>' +
+      '</div>';
+  }).join('');
+  listEl.querySelectorAll('[data-mf-fav]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f = list[Number(b.getAttribute('data-mf-fav'))];
+      if (!f) return;
+      f.favorite = !f.favorite;
+      saveMyFoods();
+      renderMyFoods();
+    });
+  });
+  listEl.querySelectorAll('[data-mf-add]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f = list[Number(b.getAttribute('data-mf-add'))];
+      if (f) addMyFoodToToday(f);
+    });
+  });
+  listEl.querySelectorAll('[data-mf-del]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f = list[Number(b.getAttribute('data-mf-del'))];
+      if (!f) return;
+      myFoods = myFoods.filter(function (x) { return x !== f; });
+      saveMyFoods();
+      renderMyFoods();
+    });
+  });
+}
+$('myfoods-toggle').addEventListener('click', function () {
+  myFoodsOpen = !myFoodsOpen;
+  try { localStorage.setItem(MYFOODS_OPEN_KEY, myFoodsOpen ? '1' : '0'); } catch (e) {}
+  renderMyFoods();
 });
 
 /* ---------- Trends ---------- */
@@ -1095,8 +1259,12 @@ $('wipe-btn').addEventListener('click', function () {
   localStorage.removeItem(MEALS_KEY);
   localStorage.removeItem(GOALS_KEY);
   localStorage.removeItem(PROFILE_KEY);
+  localStorage.removeItem(MYFOODS_KEY);
+  localStorage.removeItem(MYFOODS_OPEN_KEY);
   photoClear();
   meals = []; goals = { carbGoal: 180, calGoal: 1800 }; profile = {};
+  myFoods = []; myFoodsOpen = false;
+  renderMyFoods();
   resetForm(); renderGoals();
   alert(t('wipeDone'));
   showView('today');
