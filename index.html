@@ -1,223 +1,45 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>MealSnap — Meal Macro Counter</title>
-<meta name="description" content="Track calories, carbs, protein and fat for every meal. No sign-in. Your meals stay on your phone.">
-<meta name="theme-color" content="#1e9e5a">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="styles.css">
-</head>
-<body>
-<header class="app-header">
-  <div class="brand">
-    <img src="icons/icon-192.png" alt="" class="brand-icon">
-    <div>
-      <div class="brand-name">MealSnap</div>
-      <div class="brand-tag" data-i18n="brandTag">See your meal at a glance</div>
-    </div>
-    <select id="lang-select" class="lang-select" aria-label="Language">
-      <option value="en">English</option>
-      <option value="ko">한국어</option>
-      <option value="es">Español</option>
-    </select>
-  </div>
-</header>
+/* MealSnap service worker — cache the app shell so MealSnap opens offline. */
+var CACHE = 'mealsnap-v9';
+var SHELL = [
+  './',
+  './index.html',
+  './styles.css',
+  './app.js',
+  './manifest.webmanifest',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
+];
 
-<main>
-  <!-- TODAY -->
-  <section id="view-today" class="view active">
-    <p class="date-line" id="today-date"></p>
-    <div class="carb-hero">
-      <div class="carb-number"><span id="carb-total">0</span><span class="carb-unit">g</span></div>
-      <div class="carb-label"><span data-i18n="carbsToday">carbs today</span> · <span data-i18n="goalWord">goal</span> <span id="carb-goal-label">180</span>g</div>
-      <div class="goal-bar"><div class="goal-fill" id="carb-fill"></div></div>
-      <div class="carb-left" id="carb-left"></div>
-    </div>
-    <div class="summary-row">
-      <div class="summary-chip"><span class="chip-num" id="cal-total">0</span><span class="chip-label"><span data-i18n="caloriesWord">calories</span> · <span data-i18n="goalWord">goal</span> <span id="cal-goal-label">1800</span></span></div>
-      <div class="summary-chip"><span class="chip-num" id="protein-total">0g</span><span class="chip-label" data-i18n="proteinWord">protein</span></div>
-      <div class="summary-chip"><span class="chip-num" id="fat-total">0g</span><span class="chip-label" data-i18n="fatWord">fat</span></div>
-    </div>
-    <p class="hint" data-i18n="todayHint">No food scale needed — pick a food or type your own numbers, then adjust them to match your meal.</p>
-    <h2 class="section-title" data-i18n="todaysMeals">Today's meals</h2>
-    <div id="meal-list"></div>
-    <p class="empty-note" id="meal-empty">No meals yet today. Tap <strong>+ Add</strong> below to log your first meal.</p>
-  </section>
+self.addEventListener('install', function (e) {
+  e.waitUntil(
+    caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () {
+      return self.skipWaiting();
+    })
+  );
+});
 
-  <!-- ADD -->
-  <section id="view-add" class="view">
-    <h2 class="section-title" id="add-title">Add a meal</h2>
-    <form id="meal-form" autocomplete="off">
-      <label class="field">
-        <span data-i18n="mealName">Meal name</span>
-        <input type="text" id="f-name" required placeholder="e.g. Rice and chicken" data-i18n-ph="mealNamePh">
-      </label>
-      <div class="field-row">
-        <label class="field">
-          <span data-i18n="qtyLabel">Quantity</span>
-          <input type="number" id="f-qty" value="1" min="0.1" step="any">
-        </label>
-        <label class="field">
-          <span data-i18n="unitLabel">Unit</span>
-          <select id="f-unit">
-            <option value="piece" data-i18n="unitPiece">piece</option>
-            <option value="slice" data-i18n="unitSlice">slice</option>
-            <option value="cup" data-i18n="unitCup">cup</option>
-            <option value="tbsp" data-i18n="unitTbsp">tablespoon</option>
-            <option value="tsp" data-i18n="unitTsp">teaspoon</option>
-            <option value="ml" data-i18n="unitMl">ml</option>
-            <option value="floz" data-i18n="unitFloz">fl oz</option>
-            <option value="g" data-i18n="unitG">g</option>
-            <option value="bowl" data-i18n="unitBowl">bowl</option>
-            <option value="serving" data-i18n="unitServing">serving</option>
-          </select>
-        </label>
-      </div>
-      <button type="button" class="btn-estimate" id="name-estimate">✨ Calculate from name</button>
-      <p class="hint" data-i18n="nameHint">Type a meal name above — add an amount if you can, like "1 bowl of rice and chicken" — then tap ✨ Calculate from name. The name you typed is sent to MealSnap's calculation service (which asks Google Gemini) only when you tap it. Prefer a photo? The ✨ Calculate from photo button is in the Photo section below — both work.</p>
-      <div class="field-row">
-        <label class="field">
-          <span data-i18n="mealType">Meal</span>
-          <select id="f-type">
-            <option value="Breakfast" data-i18n="typeBreakfast">Breakfast</option>
-            <option value="Lunch" data-i18n="typeLunch">Lunch</option>
-            <option value="Dinner" data-i18n="typeDinner">Dinner</option>
-            <option value="Snack" data-i18n="typeSnack">Snack</option>
-          </select>
-        </label>
-        <label class="field">
-          <span data-i18n="servings">Servings</span>
-          <input type="number" id="f-servings" value="1" min="0.25" step="0.25">
-        </label>
-      </div>
-      <div class="field-grid">
-        <label class="field"><span data-i18n="fCalories">Calories</span><input type="number" id="f-cal" min="0" step="1" value="0"></label>
-        <label class="field"><span data-i18n="fCarbs">Carbs (g)</span><input type="number" id="f-carbs" min="0" step="1" value="0"></label>
-        <label class="field"><span data-i18n="fProtein">Protein (g)</span><input type="number" id="f-protein" min="0" step="1" value="0"></label>
-        <label class="field"><span data-i18n="fFat">Fat (g)</span><input type="number" id="f-fat" min="0" step="1" value="0"></label>
-        <label class="field"><span data-i18n="fFiber">Fiber (g)</span><input type="number" id="f-fiber" min="0" step="1" value="0"></label>
-        <label class="field"><span data-i18n="fSugar">Sugar (g)</span><input type="number" id="f-sugar" min="0" step="1" value="0"></label>
-      </div>
-      <div class="field photo-field">
-        <span data-i18n="photoOptional">Photo (optional)</span>
-        <div class="photo-row">
-          <img id="photo-preview" class="photo-preview hidden" alt="Your meal photo">
-          <label class="photo-add-btn" for="f-photo-cam" id="photo-cam-label">📷 Take a photo</label>
-          <input type="file" id="f-photo-cam" accept="image/*" capture="environment" class="visually-hidden">
-          <label class="photo-add-btn" for="f-photo" id="photo-add-label">🖼️ Pick from gallery</label>
-          <input type="file" id="f-photo" accept="image/*" class="visually-hidden">
-          <button type="button" class="small-btn danger hidden" id="photo-remove">Remove photo</button>
-        </div>
-        <button type="button" class="btn-estimate hidden" id="photo-estimate">✨ Calculate from photo</button>
-        <p class="hint" data-i18n="photoHint">Take a photo or pick one from your gallery. Photos stay on this phone — a photo is sent to MealSnap's calculation service (which asks Google Gemini) only when you tap ✨ Calculate.</p>
-      </div>
-      <p class="review-line hidden" id="estimate-note"></p>
-      <p class="review-line" id="review-line">Is this right? Check the numbers, then save.</p>
-      <button type="submit" class="btn-primary" id="save-btn">Looks right — save meal</button>
-      <button type="button" class="btn-quiet" id="clear-btn" data-i18n="clearBtn">Clear</button>
-    </form>
-    <p class="hint" data-i18n="addHintBottom">Type the numbers from your food's label or your best estimate — every number can be edited before saving.</p>
-  </section>
+self.addEventListener('activate', function (e) {
+  e.waitUntil(
+    caches.keys().then(function (keys) {
+      return Promise.all(keys.map(function (k) {
+        return k === CACHE ? null : caches.delete(k);
+      }));
+    }).then(function () { return self.clients.claim(); })
+  );
+});
 
-  <!-- TRENDS -->
-  <section id="view-trends" class="view">
-    <h2 class="section-title" data-i18n="progressTitle">Progress</h2>
-    <div class="toggle-row">
-      <button class="toggle-btn active" id="trend-week" data-i18n="weekBtn">Week</button>
-      <button class="toggle-btn" id="trend-month" data-i18n="monthBtn">Month</button>
-    </div>
-    <h3 class="chart-title" data-i18n="carbsPerDay">Carbs per day (g)</h3>
-    <div class="chart" id="chart-carbs"></div>
-    <div class="chart-stats" id="chart-stats"></div>
-    <h3 class="chart-title" data-i18n="dailyTotals">Daily totals</h3>
-    <div id="day-list"></div>
-  </section>
-
-  <!-- GOALS -->
-  <section id="view-goals" class="view">
-    <h2 class="section-title" data-i18n="goalsTitle">My goals</h2>
-    <div class="field-row">
-      <label class="field"><span data-i18n="carbsGoalLabel">Carbs goal (g / day)</span><input type="number" id="g-carbs" min="1" step="1"></label>
-      <label class="field"><span data-i18n="calGoalLabel">Calorie goal (per day)</span><input type="number" id="g-cal" min="1" step="10"></label>
-    </div>
-    <button class="btn-primary" id="goals-save">Save goals</button>
-
-    <h3 class="chart-title" data-i18n="calcTitle">Calorie suggestion calculator</h3>
-    <p class="hint" data-i18n="calcHint">Uses the Mifflin–St Jeor formula. Optional — you can always set goals yourself above.</p>
-    <div class="field">
-      <span data-i18n="unitsLabel">Units</span>
-      <div class="toggle-row">
-        <button type="button" class="toggle-btn active" id="units-metric" data-i18n="unitsMetric">Metric (cm / kg)</button>
-        <button type="button" class="toggle-btn" id="units-imperial" data-i18n="unitsImperial">Imperial (ft / lb)</button>
-      </div>
-    </div>
-    <div class="field-grid">
-      <label class="field"><span data-i18n="sexLabel">Sex</span>
-        <select id="c-sex"><option value="female" data-i18n="female">Female</option><option value="male" data-i18n="male">Male</option></select>
-      </label>
-      <label class="field"><span data-i18n="ageLabel">Age (years)</span><input type="number" id="c-age" min="13" max="110" placeholder="45"></label>
-      <label class="field" id="c-height-wrap"><span id="c-height-label">Height (cm)</span><input type="number" id="c-height" min="100" max="250" placeholder="165"></label>
-      <div class="field hidden" id="c-height-imp-wrap">
-        <span id="c-height-imp-label">Height (ft / in)</span>
-        <div class="field-row">
-          <input type="number" id="c-height-ft" min="3" max="8" step="1" placeholder="Feet" data-i18n-ph="feetPh" aria-label="Feet">
-          <input type="number" id="c-height-in" min="0" max="11" step="1" placeholder="Inches" data-i18n-ph="inchesPh" aria-label="Inches">
-        </div>
-      </div>
-      <label class="field" id="c-weight-wrap"><span id="c-weight-label">Weight (kg)</span><input type="number" id="c-weight" min="30" max="300" placeholder="70"></label>
-      <label class="field hidden" id="c-weight-imp-wrap"><span id="c-weight-imp-label">Weight (lb)</span><input type="number" id="c-weight-lb" min="66" max="661" step="1" placeholder="154"></label>
-      <label class="field"><span data-i18n="activityLabel">Activity</span>
-        <select id="c-activity">
-          <option value="1.2" data-i18n="actSit">Mostly sitting</option>
-          <option value="1.375" data-i18n="actLight">Light (walks, light chores)</option>
-          <option value="1.55" data-i18n="actMod">Moderate (active most days)</option>
-          <option value="1.725" data-i18n="actVery">Very active</option>
-        </select>
-      </label>
-      <label class="field"><span data-i18n="aimLabel">My aim</span>
-        <select id="c-aim">
-          <option value="0.85" data-i18n="aimLose">Lose weight slowly</option>
-          <option value="1" selected data-i18n="aimKeep">Keep my weight</option>
-          <option value="1.1" data-i18n="aimGain">Gain a little</option>
-        </select>
-      </label>
-    </div>
-    <button class="btn-primary" id="calc-btn" data-i18n="calcBtn">Calculate suggestion</button>
-    <p class="review-line" id="calc-result"></p>
-    <button class="btn-quiet hidden" id="calc-use" data-i18n="useGoalBtn">Use this as my calorie goal</button>
-
-    <p class="disclaimer" data-i18n="disclaimer">MealSnap is for information only. It does not diagnose, treat, or give medical advice. Please set your personal goals with your doctor or care team.</p>
-
-    <h3 class="chart-title" data-i18n="myDataTitle">My data</h3>
-    <p class="hint" data-i18n="myDataHint">Your meals and meal photos are saved only on this phone. No account, no sign-in. Nothing is sent anywhere unless you tap ✨ Calculate from photo — then that one photo is sent to MealSnap's calculation service, which asks Google Gemini for an estimate.</p>
-    <button class="btn-danger" id="wipe-btn" data-i18n="deleteAllBtn">Delete all my data</button>
-  </section>
-</main>
-
-<!-- PHOTO VIEWER -->
-<div id="photo-lightbox" class="lightbox hidden">
-  <img id="lightbox-img" alt="Meal photo">
-  <button type="button" class="lightbox-close" id="lightbox-close">✕ Close</button>
-</div>
-
-<nav class="tab-bar">
-  <button class="tab active" data-view="today"><span class="tab-ico">🏠</span><span class="tab-label" data-i18n="tabToday">Today</span></button>
-  <button class="tab" data-view="add"><span class="tab-ico">＋</span><span class="tab-label" data-i18n="tabAdd">Add</span></button>
-  <button class="tab" data-view="trends"><span class="tab-ico">📊</span><span class="tab-label" data-i18n="tabTrends">Trends</span></button>
-  <button class="tab" data-view="goals"><span class="tab-ico">🎯</span><span class="tab-label" data-i18n="tabGoals">Goals</span></button>
-</nav>
-
-<script src="app.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').catch(function () {});
-  });
-}
-</script>
-</body>
-</html>
+self.addEventListener('fetch', function (e) {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(
+    caches.match(e.request).then(function (hit) {
+      if (hit) return hit;
+      return fetch(e.request).then(function (res) {
+        var copy = res.clone();
+        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+        return res;
+      }).catch(function () {
+        return caches.match('./index.html');
+      });
+    })
+  );
+});
