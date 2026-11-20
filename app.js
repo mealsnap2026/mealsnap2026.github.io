@@ -296,7 +296,8 @@ var STRINGS = {
     aimLabel: 'My aim', aimLose: 'Lose weight slowly', aimKeep: 'Keep my weight', aimGain: 'Gain a little',
     calcBtn: 'Calculate suggestion', useGoalBtn: 'Use this as my calorie goal',
     calcFillIn: 'Please fill in age, height, and weight to get a suggestion.',
-    calcSuggested: 'Suggested daily calories for you: about {n} cal. This is an estimate — your doctor or care team can fine-tune it.',
+    calcEstLabel: 'Est. Recommended Calories', calcUnit: 'cal',
+    calcEstNote: 'Estimate — your doctor or care team can fine-tune it.',
     calcSaved: 'Saved — your calorie goal is now {n} cal per day.',
     disclaimer: 'MealSnap is for information only. It does not diagnose, treat, or give medical advice. Please set your personal goals with your doctor or care team.',
     myDataTitle: 'My data',
@@ -380,7 +381,8 @@ var STRINGS = {
     aimLabel: '내 목표', aimLose: '천천히 체중 감량', aimKeep: '체중 유지', aimGain: '조금 체중 증가',
     calcBtn: '제안 계산하기', useGoalBtn: '이 값을 내 칼로리 목표로 사용',
     calcFillIn: '제안을 받으려면 나이, 키, 몸무게를 입력하세요.',
-    calcSuggested: '당신에게 제안하는 하루 칼로리: 약 {n}칼로리. 이는 추정값입니다 — 의사나 의료진과 상의해 조정하세요.',
+    calcEstLabel: '추정 권장 칼로리', calcUnit: '칼로리',
+    calcEstNote: '추정값입니다 — 의사나 의료진과 상의해 조정하세요.',
     calcSaved: '저장되었습니다 — 이제 하루 칼로리 목표는 {n}칼로리입니다.',
     disclaimer: 'MealSnap은 정보 제공용입니다. 진단, 치료 또는 의학적 조언을 제공하지 않습니다. 개인 목표는 의사나 의료진과 상의해 정하세요.',
     myDataTitle: '내 데이터',
@@ -464,7 +466,8 @@ var STRINGS = {
     aimLabel: 'Mi objetivo', aimLose: 'Bajar de peso poco a poco', aimKeep: 'Mantener mi peso', aimGain: 'Subir un poco',
     calcBtn: 'Calcular sugerencia', useGoalBtn: 'Usar esto como mi meta de calorías',
     calcFillIn: 'Completa la edad, la altura y el peso para obtener una sugerencia.',
-    calcSuggested: 'Calorías diarias sugeridas para ti: unas {n} cal. Es una estimación; tu médico o equipo de salud puede ajustarla.',
+    calcEstLabel: 'Calorías recomendadas (est.)', calcUnit: 'cal',
+    calcEstNote: 'Es una estimación; tu médico o equipo de salud puede ajustarla.',
     calcSaved: 'Guardado: tu meta de calorías ahora es de {n} cal por día.',
     disclaimer: 'MealSnap es solo con fines informativos. No diagnostica, no trata ni da consejos médicos. Define tus metas personales con tu médico o equipo de salud.',
     myDataTitle: 'Mis datos',
@@ -521,6 +524,7 @@ function applyLanguage() {
   }
   refreshPhotoLabels();
   renderUnits();
+  renderCalcResult();
   renderToday();
   renderTrends();
   renderMyFoods();
@@ -864,6 +868,30 @@ function updateReview() {
     name: name, carbs: round(num($('f-carbs'))), cal: round(num($('f-cal')))
   });
 }
+/* ---------- Meal type time default ---------- */
+/* Which meal type fits an hour of the day (0–23), as a pure function so
+   it can be unit-tested: 05–10 Breakfast, 11–15 Lunch, 16–21 Dinner.
+   Late night (22–04) returns null — Snack is never auto-selected,
+   because a snack can be any time; it is only ever chosen manually. */
+function mealTypeForHour(h) {
+  if (h >= 5 && h < 11) return 'Breakfast';
+  if (h >= 11 && h < 16) return 'Lunch';
+  if (h >= 16 && h < 22) return 'Dinner';
+  return null;
+}
+/* True once the user picks a Meal type themselves in this entry; the
+   time default must never override their choice. resetForm clears it
+   each time the form restarts for a new entry. */
+var mealTypeTouched = false;
+$('f-type').addEventListener('change', function () { mealTypeTouched = true; });
+/* Pre-select the Meal type for a fresh entry, unless the user has
+   already chosen one for this entry. Only resetForm calls this —
+   editing a meal always keeps its saved type. */
+function applyMealTypeDefault() {
+  if (mealTypeTouched) return;
+  var s = mealTypeForHour(new Date().getHours());
+  if (s) $('f-type').value = s;
+}
 function resetForm() {
   editingId = null;
   selectedFood = null;
@@ -875,6 +903,9 @@ function resetForm() {
   /* Quantity always restarts at 1; the unit restarts at the last one used. */
   $('f-qty').value = 1;
   $('f-unit').value = lastFoodUnit;
+  /* A new entry starts untouched: pre-select the meal type by time. */
+  mealTypeTouched = false;
+  applyMealTypeDefault();
   setFormValues({ cal: 0, carbs: 0, protein: 0, fat: 0, fiber: 0, sugar: 0 });
 }
 function startEdit(id) {
@@ -1229,12 +1260,36 @@ $('goals-save').addEventListener('click', function () {
   setTimeout(function () { $('goals-save').textContent = t('saveGoals'); }, 1500);
 });
 var lastSuggestion = null;
+/* What the calculator result area is showing: '' (nothing yet), 'fillin',
+   'suggested' or 'saved'. Tracked so a language switch can re-render the
+   same state in the new language. The 'suggested' state is a three-part
+   block: a short label, the number big and bold, and the care note as
+   small print (Yuna, Nov 19, 2026 — the old one-sentence result was too
+   small and too wordy). */
+var calcResultState = '';
+function renderCalcResult() {
+  var el = $('calc-result');
+  if (calcResultState === 'suggested' && lastSuggestion) {
+    el.innerHTML =
+      '<span class="calc-label">' + esc(t('calcEstLabel')) + '</span>' +
+      '<span class="calc-value">' + lastSuggestion +
+      ' <span class="calc-unit">' + esc(t('calcUnit')) + '</span></span>' +
+      '<span class="calc-note">' + esc(t('calcEstNote')) + '</span>';
+  } else if (calcResultState === 'fillin') {
+    el.textContent = t('calcFillIn');
+  } else if (calcResultState === 'saved' && lastSuggestion) {
+    el.textContent = fill(t('calcSaved'), { n: lastSuggestion });
+  } else {
+    el.textContent = '';
+  }
+}
 $('calc-btn').addEventListener('click', function () {
   var sex = $('c-sex').value;
   var age = num($('c-age')), h = readHeightCm(), w = readWeightKg();
   var act = parseFloat($('c-activity').value), aim = parseFloat($('c-aim').value);
   if (!age || !h || !w || h < 100 || h > 250 || w < 30 || w > 300) {
-    $('calc-result').textContent = t('calcFillIn');
+    calcResultState = 'fillin';
+    renderCalcResult();
     $('calc-use').classList.add('hidden');
     return;
   }
@@ -1243,7 +1298,8 @@ $('calc-btn').addEventListener('click', function () {
   lastSuggestion = Math.round((bmr * act * aim) / 10) * 10;
   profile = { sex: sex, age: age, height: h, weight: w, activity: $('c-activity').value, aim: $('c-aim').value };
   saveJSON(PROFILE_KEY, profile);
-  $('calc-result').textContent = fill(t('calcSuggested'), { n: lastSuggestion });
+  calcResultState = 'suggested';
+  renderCalcResult();
   $('calc-use').classList.remove('hidden');
 });
 $('calc-use').addEventListener('click', function () {
@@ -1251,7 +1307,8 @@ $('calc-use').addEventListener('click', function () {
   goals.calGoal = lastSuggestion;
   saveJSON(GOALS_KEY, goals);
   $('g-cal').value = lastSuggestion;
-  $('calc-result').textContent = fill(t('calcSaved'), { n: lastSuggestion });
+  calcResultState = 'saved';
+  renderCalcResult();
   $('calc-use').classList.add('hidden');
 });
 $('wipe-btn').addEventListener('click', function () {
